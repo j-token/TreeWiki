@@ -17,7 +17,7 @@ description: AGENTS.md 지도, 유형화된 Markdown, L0–L3 기억과 Persona,
 | 일부만 있거나 기존 문서 이관 | `adopt` 또는 `repair` | [도입 절차](references/adoption-workflow.md) |
 | 코드·문서 변경 | `change` | [변경과 감사](references/change-and-audit.md) |
 | 읽기·진단·오래된 지식 점검 | `audit` | [변경과 감사](references/change-and-audit.md) |
-| 대화 기억·Persona 갱신 | `memory` | [기억과 Persona](references/memory-and-persona.md), [훅 생명주기](references/hook-lifecycle.md) |
+| 대화 기억·Persona 갱신 | `memory` | [기억과 Persona](references/memory-and-persona.md), [기억 생명주기](references/hook-lifecycle.md) |
 | 파생 색인만 갱신 | `reindex` | [임베딩과 위치 검색](references/embedding-retrieval.md) |
 
 `audit`에서는 파일을 수정하지 않는다. 구조가 없을 때만 `bootstrap`을 사용하며, 기존 파일을 덮어쓰지 않는다.
@@ -45,7 +45,7 @@ bootstrap 명령에는 답을 `--embedding local` 또는 `--embedding disabled`�
 - Markdown frontmatter를 만들거나 바꿀 때: [메타데이터 스키마](references/metadata-schema.md)
 - 계약·결정의 대체·폐기·복구가 필요할 때: [생명주기와 관계](references/lifecycle-and-relations.md)
 - `.knowledge/config.yml`에서 `embedding.enabled: true`일 때만: [임베딩과 위치 검색](references/embedding-retrieval.md)
-- L0–L3 자동 기억 또는 작업 완료 runbook이 관련될 때: [훅 생명주기](references/hook-lifecycle.md)
+- L0–L3 기억 또는 작업 완료 runbook이 관련될 때: [기억 생명주기](references/hook-lifecycle.md)
 
 필요하지 않은 reference를 미리 읽지 않는다. reference는 이 파일에서 직접 연결된 1단계 깊이만 사용한다.
 
@@ -55,7 +55,7 @@ bootstrap 명령에는 답을 `--embedding local` 또는 `--embedding disabled`�
 - 조회 전에 호출자의 `user:*`, `team:*`, 선택적 `role:*`, `agent:*`를 확인하고 ACL을 점수 계산보다 먼저 적용한다.
 - `query search`, `read`, `list`, `graph`, `glossary`와 `manage validate`는 읽기 전용이다.
 - `manage sync`, `reindex`, `migrate`는 manager 주체가 사용자 허락을 받은 뒤에만 `--apply`를 사용한다.
-- 기억 캡처 기본값은 `hook`이다. L0–L2는 Stop 훅이 순서대로 발화하고, 개인·제한 기억은 Git에서 제외된 `.knowledge/private-memory/`에 둔다.
+- 기억 캡처 기본값은 `explicit`이다. LLM이 작업 완료 후보를 판단해 사용자에게 저장 여부를 묻고, 사용자가 다음 메시지에서 명시적으로 확인한 뒤에만 L0–L2를 순서대로 처리한다. Stop 훅은 기억 저장 트리거로 사용하지 않는다. 개인·제한 기억은 Git에서 제외된 `.knowledge/private-memory/`에 둔다.
 - L3는 프로그램이 같은 subject의 활성 L1/L2 근거 수를 확인한 뒤에만 발화한다. runbook은 완료·commit·push·pull request 같은 인수인계 경계 신호에서 같은 작업 단위에 한 번만 제안하고, 사용자가 `만들기`를 선택한 뒤에만 `draft`로 시작한다.
 - 외부 전송을 허용받지 않으면 로컬 처리만 사용하고, 확인되지 않은 provider나 model ID를 만들지 않는다.
 
@@ -76,10 +76,14 @@ python <skill-path>/scripts/knowledge_cli.py manage validate <repository-root>
 
 ## 6. 완료 보고
 
+현재 사용자 요청 전체가 완료 후보인지 먼저 판단한다. 아직 직접 수행할 작업이 남았거나 승인·선택·추가정보를 기다리면 기억 저장을 묻지 않는다. 완료 후보이면 결과 보고 끝에 `이 작업을 마친 것으로 보고 기억을 저장할까요?`라고 한 번 묻고 `저장하기`와 `계속 작업`을 안내한다. 이 질문을 한 턴에는 기억 파일을 만들지 않는다.
+
+다음 사용자 메시지가 독립된 짧은 긍정 답변일 때만 `memory` 모드로 L0–L3를 처리한다. 긍정 표현에 새 지시가 붙거나 사용자가 계속 작업을 선택하면 저장하지 않고 현재 작업을 이어간다.
+
 - 선택한 모드와 변경한 경로
 - 적용한 계약·결정·지도와 검증 근거
 - 기억 계층, provenance와 접근 범위
 - 실행한 검증과 오류·경고 수
 - 임베딩 선택, BM25 문서 수와 외부 전송 정책
 - 문서 영향이 없다면 그 근거
-- 훅에서 발화한 L0–L3, runbook 제안 여부와 사용자 선택
+- 사용자 확인 뒤 저장한 L0–L3, runbook 제안 여부와 사용자 선택

@@ -11,13 +11,13 @@ glossary_path: docs/vocabulary/glossary.yml
 review_warning_days: 180
 memory:
   enabled: true
-  capture: hook
+  capture: explicit
   shared_path: docs/memory
   private_path: .knowledge/private-memory
   levels: [l0, l1, l2, l3]
   persona_requires_sources: 2
 hooks:
-  enabled: true
+  enabled: false
   execution: same_thread
   memory_stages: [l0, l1, l2]
   l3:

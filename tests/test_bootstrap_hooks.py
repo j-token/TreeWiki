@@ -39,7 +39,8 @@ class BootstrapHookTests(unittest.TestCase):
             config = yaml.safe_load(
                 (repository / ".knowledge" / "config.yml").read_text(encoding="utf-8")
             )
-            self.assertEqual(config["memory"]["capture"], "hook")
+            self.assertEqual(config["memory"]["capture"], "explicit")
+            self.assertFalse(config["hooks"]["enabled"])
             self.assertEqual(config["hooks"]["runbook"]["status"], "draft")
             self.assertTrue(config["hooks"]["runbook"]["require_user_confirmation"])
             self.assertEqual(config["glossary_path"], "docs/vocabulary/glossary.yml")
