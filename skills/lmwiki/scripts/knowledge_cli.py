@@ -70,7 +70,7 @@ def merge_missing(target: dict[str, Any], defaults: dict[str, Any], prefix: str 
 def repository_config(root: Path) -> dict[str, Any]:
     path = root / ".knowledge" / "config.yml"
     if not path.exists():
-        raise ValueError(".knowledge/config.yml not found; use lmwiki-builder")
+        raise ValueError(".knowledge/config.yml not found; use lmwiki bootstrap mode")
     return load_yaml(path)
 
 
@@ -525,7 +525,7 @@ def manage_migrate(args: argparse.Namespace) -> int:
     root = Path(args.repository).resolve()
     config_path = root / ".knowledge" / "config.yml"
     if not config_path.exists():
-        print("ERROR .knowledge/config.yml not found; use lmwiki-builder")
+        print("ERROR .knowledge/config.yml not found; use lmwiki bootstrap mode")
         return 1
     config = load_yaml(config_path)
     added = merge_missing(config, DEFAULT_CONFIG)

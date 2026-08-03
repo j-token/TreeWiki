@@ -4,7 +4,7 @@
 
 AI coding agents can add code faster than a team can keep documentation current. LMWiki keeps repository maps, contracts, decisions, runbooks, layered memory, personas, and validation links connected to the code.
 
-LMWiki is distributed as two Agent Skills. `lmwiki-builder` creates or migrates the knowledge structure. `lmwiki-steward` handles routine changes after setup.
+LMWiki is distributed as one Agent Skill. `$lmwiki` selects a bootstrap, adoption, change, audit, memory, or reindex mode from the repository state and the request. Detailed rules are loaded only when that mode needs them.
 
 ## What it manages
 
@@ -19,45 +19,33 @@ LMWiki is distributed as two Agent Skills. `lmwiki-builder` creates or migrates 
 
 ## Install
 
-Install both skills with the open [Skills CLI](https://github.com/vercel-labs/skills):
+Install the skill with the open [Skills CLI](https://github.com/vercel-labs/skills):
 
 ```powershell
-npx skills add j-token/lmwiki --skill lmwiki-builder --skill lmwiki-steward
+npx skills add j-token/lmwiki --skill lmwiki
 ```
 
 For a global Codex installation:
 
 ```powershell
-npx skills add j-token/lmwiki --skill lmwiki-builder --skill lmwiki-steward -g -a codex -y --copy
-```
-
-Each skill can also be installed separately.
-
-```powershell
-npx skills add j-token/lmwiki --skill lmwiki-builder
-npx skills add j-token/lmwiki --skill lmwiki-steward
+npx skills add j-token/lmwiki --skill lmwiki -g -a codex -y --copy
 ```
 
 ## Use
 
-Use the builder for a new or existing repository that does not have an LMWiki structure:
+Use the skill for initial setup:
 
 ```text
-Use $lmwiki-builder to initialize this repository and migrate its existing documentation.
+Use $lmwiki to initialize this repository and migrate its existing documentation.
 ```
 
-Use the steward after setup:
+Use the same skill for an existing repository change:
 
 ```text
-Use $lmwiki-steward to update this authentication flow and keep its contracts and runbooks current.
+Use $lmwiki to update this authentication flow and keep its contracts and runbooks current.
 ```
 
-| Skill | Work |
-| --- | --- |
-| `lmwiki-builder` | New setup, document and memory migration, access policy, embedding policy, and the first index |
-| `lmwiki-steward` | ACL-filtered queries, code and document changes, memory distillation, audits, lifecycle updates, sync, and reindexing |
-
-The steward does not create a missing LMWiki structure. It reports that the builder is required.
+The root `SKILL.md` contains mode selection and shared safety boundaries. Adoption, access control, metadata, memory, lifecycle, and embedding details stay in direct references and are loaded only when relevant.
 
 ## Document model
 
@@ -112,13 +100,13 @@ access:
   owner: user:owner
   team: team:repository
   grants:
-    - subject: agent:builder
+    - subject: agent:lmwiki
       permissions: [read]
 ```
 
 ## Repository layout
 
-The skills create and maintain this layout in a target repository:
+The skill creates and maintains this layout in a target repository:
 
 ```text
 AGENTS.md
@@ -161,8 +149,8 @@ Memory capture defaults to `explicit`. Private and restricted memory stays under
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki-steward/scripts/knowledge_cli.py query search <repository-root> "authentication" --principal user:owner --team team:repository
-python skills/lmwiki-steward/scripts/knowledge_cli.py query graph <repository-root> --principal user:owner --team team:repository
+python skills/lmwiki/scripts/knowledge_cli.py query search <repository-root> "authentication" --principal user:owner --team team:repository
+python skills/lmwiki/scripts/knowledge_cli.py query graph <repository-root> --principal user:owner --team team:repository
 ```
 
 `query search`, `read`, `list`, and `graph` never write files. `manage validate` is also read-only. `manage sync`, `reindex`, and `migrate` require a subject listed in `access_control.managers`; they also require `--apply` before mutating repository state.
@@ -171,11 +159,11 @@ Search deliberately favors recall over a short, precise answer. With embeddings 
 
 ## Optional embeddings
 
-The builder asks once whether the repository should use embeddings. A declined or unanswered choice keeps metadata, vocabulary, path, and relationship search enabled.
+During initial setup, LMWiki asks once whether the repository should use embeddings. A declined or unanswered choice keeps metadata, vocabulary, path, and relationship search enabled.
 
 Remote document transfer defaults to disabled. Documents marked `local_only` stay local, and documents marked `deny` do not enter the chunk manifest. Markdown remains the source of truth; the vector index can be deleted and rebuilt.
 
-The included index builders create provider-neutral JSONL chunks and a local SQLite FTS5/BM25 database. The database is enabled only with embeddings, is ignored by Git, and can be deleted and rebuilt. ACL-allowed document IDs are selected before BM25 ranking. Model selection and vector storage follow the repository's existing stack. The skills do not invent a model ID or switch remote providers after a failure.
+The included index scripts create provider-neutral JSONL chunks and a local SQLite FTS5/BM25 database. The database is enabled only with embeddings, is ignored by Git, and can be deleted and rebuilt. ACL-allowed document IDs are selected before BM25 ranking. Model selection and vector storage follow the repository's existing stack. LMWiki does not invent a model ID or switch remote providers after a failure.
 
 ## Validate
 
@@ -185,22 +173,22 @@ Create a new structure from this repository checkout:
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki-builder/scripts/bootstrap_lmwiki.py <repository-root> --embedding disabled
+python skills/lmwiki/scripts/bootstrap_lmwiki.py <repository-root> --embedding disabled
 ```
 
 Validate an existing LMWiki repository:
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki-steward/scripts/validate_knowledge.py <repository-root>
+python skills/lmwiki/scripts/validate_knowledge.py <repository-root>
 ```
 
 Build the chunk manifest and SQLite search index when embeddings are enabled:
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki-steward/scripts/build_embedding_index.py <repository-root>
-python skills/lmwiki-steward/scripts/build_search_index.py <repository-root>
+python skills/lmwiki/scripts/build_embedding_index.py <repository-root>
+python skills/lmwiki/scripts/build_search_index.py <repository-root>
 ```
 
 ## Current limits

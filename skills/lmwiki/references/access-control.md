@@ -8,7 +8,7 @@ access:
   owner: user:j-token
   team: team:repository
   grants:
-    - subject: agent:builder
+    - subject: agent:lmwiki
       permissions:
         - read
 ```

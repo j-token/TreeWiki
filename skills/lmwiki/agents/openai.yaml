@@ -1,0 +1,4 @@
+interface:
+  display_name: "LMWiki"
+  short_description: "저장소 지식 구축·조회·기억·색인을 하나의 흐름으로 관리합니다"
+  default_prompt: "Use $lmwiki to build or maintain repository knowledge with maps, memory, ACL-first retrieval, and local search indexes."

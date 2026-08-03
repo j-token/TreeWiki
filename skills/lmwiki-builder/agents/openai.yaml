@@ -1,4 +1,0 @@
-interface:
-  display_name: "LMWiki 구축"
-  short_description: "SQLite BM25 위치 검색을 포함한 저장소 지식 체계를 구축합니다"
-  default_prompt: "Use $lmwiki-builder to build repository knowledge, ACLs, layered memory, and local SQLite BM25 location retrieval here."
