@@ -69,6 +69,7 @@ def main() -> int:
     text_files = {
         "AGENTS.md": assets / "AGENTS.md",
         "docs/vocabulary/topics.yml": assets / "topics.yml",
+        "docs/vocabulary/glossary.yml": assets / "glossary.yml",
         ".knowledge/purpose.md": assets / "purpose.md",
         ".knowledge/schema.md": assets / "schema.md",
         ".knowledge/private-memory/.gitignore": assets / "private-memory.gitignore",

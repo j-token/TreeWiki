@@ -39,6 +39,7 @@ bootstrap 명령에는 답을 `--embedding local` 또는 `--embedding disabled`�
 ## 3. 필요한 규칙만 공개
 
 - 모든 조회·관리 명령: [명령 경계](references/command-boundaries.md)
+- 저장소 고유 명칭을 추가·수정·조회할 때: [용어집](references/glossary.md)
 - 사용자·팀·역할·에이전트 권한이 관련될 때: [접근 제어](references/access-control.md)
 - `AGENTS.md`를 만들거나 바꿀 때: [지도 규칙](references/agents-map.md)
 - Markdown frontmatter를 만들거나 바꿀 때: [메타데이터 스키마](references/metadata-schema.md)
@@ -52,10 +53,10 @@ bootstrap 명령에는 답을 `--embedding local` 또는 `--embedding disabled`�
 
 - Markdown과 frontmatter를 권위 있는 원본으로 유지한다.
 - 조회 전에 호출자의 `user:*`, `team:*`, 선택적 `role:*`, `agent:*`를 확인하고 ACL을 점수 계산보다 먼저 적용한다.
-- `query search`, `read`, `list`, `graph`와 `manage validate`는 읽기 전용이다.
+- `query search`, `read`, `list`, `graph`, `glossary`와 `manage validate`는 읽기 전용이다.
 - `manage sync`, `reindex`, `migrate`는 manager 주체가 사용자 허락을 받은 뒤에만 `--apply`를 사용한다.
 - 기억 캡처 기본값은 `hook`이다. L0–L2는 Stop 훅이 순서대로 발화하고, 개인·제한 기억은 Git에서 제외된 `.knowledge/private-memory/`에 둔다.
-- L3는 프로그램이 같은 subject의 활성 L1/L2 근거 수를 확인한 뒤에만 발화한다. runbook은 사용자 피드백이 필요하지 않은 완료 후보에서만 검토하며 새 문서는 `draft`로 시작한다.
+- L3는 프로그램이 같은 subject의 활성 L1/L2 근거 수를 확인한 뒤에만 발화한다. runbook은 완료·commit·push·pull request 같은 인수인계 경계 신호에서 같은 작업 단위에 한 번만 제안하고, 사용자가 `만들기`를 선택한 뒤에만 `draft`로 시작한다.
 - 외부 전송을 허용받지 않으면 로컬 처리만 사용하고, 확인되지 않은 provider나 model ID를 만들지 않는다.
 
 ## 5. 실행 진입점
@@ -66,6 +67,7 @@ Windows PowerShell에서는 UTF-8 모드와 `python`을 사용한다.
 $env:PYTHONUTF8='1'
 python <skill-path>/scripts/bootstrap_lmwiki.py <repository-root> --embedding local --owner user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query search <repository-root> "<query>" --principal user:<id> --team team:<id>
+python <skill-path>/scripts/knowledge_cli.py query glossary <repository-root> "<용어>" --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py manage validate <repository-root>
 ```
 
@@ -80,4 +82,4 @@ python <skill-path>/scripts/knowledge_cli.py manage validate <repository-root>
 - 실행한 검증과 오류·경고 수
 - 임베딩 선택, BM25 문서 수와 외부 전송 정책
 - 문서 영향이 없다면 그 근거
-- 훅에서 발화한 L0–L3와 runbook 단계, 피드백 필요로 건너뛴 단계
+- 훅에서 발화한 L0–L3, runbook 제안 여부와 사용자 선택

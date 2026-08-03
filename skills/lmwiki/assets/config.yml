@@ -7,6 +7,7 @@ documents:
     - ".knowledge/private-memory/**/*.md"
   exclude: []
 vocabulary_path: docs/vocabulary/topics.yml
+glossary_path: docs/vocabulary/glossary.yml
 review_warning_days: 180
 memory:
   enabled: true
@@ -24,7 +25,7 @@ hooks:
     minimum_sources: 2
   runbook:
     enabled: true
-    require_no_feedback: true
+    require_user_confirmation: true
     status: draft
 access_control:
   default_visibility: team

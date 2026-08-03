@@ -13,10 +13,11 @@ LMWiki를 처음 구축할 때 임베딩과 로컬 SQLite BM25 위치 색인을 
 - `AGENTS.md`는 코드 영역, 활성 계약과 검증 명령을 연결합니다.
 - Markdown frontmatter에는 문서 ID, 유형, 상태, 주제, 적용 범위와 관계를 기록합니다.
 - 통제어휘는 `auth`, `login` 같은 이명을 하나의 주제 키에 연결합니다.
+- 용어집은 팀원과 AI가 같은 대상을 같은 명사로 부르도록 용어와 설명을 연결합니다.
 - 검증기는 중복 ID, 끊어진 링크, 잘못된 상태 의존과 검증 근거가 없는 활성 계약을 찾습니다.
 - Stop 훅은 L0 원문, L1 사실, L2 작업 장면을 순서대로 발화합니다.
 - L3는 프로그램이 근거 수를 검사한 뒤 장기 Persona 검토를 발화합니다.
-- 사용자 피드백이 필요하지 않은 완료 작업만 마지막 runbook 검토로 보냅니다.
+- 완료·commit·push·pull request 같은 인수인계 경계 신호가 보이면 runbook 생성 여부를 같은 작업에서 한 번 묻고, 사용자가 선택한 뒤에만 초안을 만듭니다.
 - 사용자·팀·역할·에이전트 정책은 검색 점수를 계산하기 전에 조회 범위를 거릅니다.
 - 읽기 전용 `query` 명령과 파일을 바꿀 수 있는 `manage` 명령을 분리합니다.
 - 임베딩을 허용하면 로컬 SQLite FTS5/BM25 색인이 관련 문서 위치를 넓게 찾습니다. Markdown 원본을 대체하지 않습니다.
@@ -145,7 +146,8 @@ docs/
 ├── memory/
 │   └── l2/
 └── vocabulary/
-    └── topics.yml
+    ├── topics.yml
+    └── glossary.yml
 ```
 
 루트 지도에서 주요 코드 영역까지 2번 이하의 지도 링크로 도달하게 합니다. 하위 지도는 루트 규칙을 복사하지 않고 해당 영역의 정보만 추가합니다.
@@ -157,7 +159,7 @@ docs/
 - L2는 프로젝트나 작업 장면을 복원합니다.
 - L3 Persona는 서로 다른 L1 또는 L2 근거가 두 개 이상일 때만 만듭니다.
 
-기억 캡처 기본값은 `hook`입니다. Codex `Stop` 훅이 L0→L1→L2를 순차 발화하고, 프로그램이 같은 subject의 활성 L1/L2 근거를 두 개 이상 확인했을 때만 L3 검토를 발화합니다. 최초 완료 메시지가 승인·선택·추가정보를 요구하지 않을 때만 마지막 runbook 검토가 실행되며 새 runbook은 `draft`로 시작합니다.
+기억 캡처 기본값은 `hook`입니다. Codex `Stop` 훅이 L0→L1→L2를 순차 발화하고, 프로그램이 같은 subject의 활성 L1/L2 근거를 두 개 이상 확인했을 때만 L3 검토를 발화합니다. 마지막 단계는 완료·commit·push·pull request 같은 인수인계 경계 신호를 검토합니다. 신호가 있으면 AI가 같은 작업 단위에서 runbook 생성 여부를 한 번 묻고, 사용자가 `만들기`를 선택한 뒤에만 `draft`를 작성합니다.
 
 개인·제한 기억은 Git에서 제외되는 `.knowledge/private-memory/`에 둡니다. frontmatter ACL은 에이전트 조회를 거르는 정책이며, 저장소를 읽을 수 있는 사람의 파일 접근을 차단하지는 못합니다.
 
@@ -168,10 +170,11 @@ docs/
 ```powershell
 $env:PYTHONUTF8='1'
 python skills/lmwiki/scripts/knowledge_cli.py query search <repository-root> "인증" --principal user:owner --team team:repository
+python skills/lmwiki/scripts/knowledge_cli.py query glossary <repository-root> "워크스페이스" --principal user:owner --team team:repository
 python skills/lmwiki/scripts/knowledge_cli.py query graph <repository-root> --principal user:owner --team team:repository
 ```
 
-`query search`, `read`, `list`, `graph`는 파일을 변경하지 않습니다. `manage validate`도 읽기 전용입니다. `manage sync`, `reindex`, `migrate`는 호출 주체가 `access_control.managers`에 있어야 하며, `--apply`가 있어야 저장소를 변경합니다.
+`query search`, `read`, `list`, `graph`, `glossary`는 파일을 변경하지 않습니다. `query glossary`는 용어를 생략하면 전체 항목을, 지정하면 용어와 설명이 일치하는 항목을 반환합니다. `manage validate`도 읽기 전용이며 용어·설명 누락과 중복 용어를 검사합니다. `manage sync`, `reindex`, `migrate`는 호출 주체가 `access_control.managers`에 있어야 하며, `--apply`가 있어야 저장소를 변경합니다.
 
 검색은 짧고 정확한 답보다 관련 문서를 놓치지 않는 쪽을 택합니다. 임베딩을 켜면 통제어휘 이명, 접두어와 한국어 2글자 토큰을 확장해 BM25 후보를 최대 24개 찾고, 관계를 1 hop 따라간 뒤 위치를 최대 12개 반환합니다. 결과에는 `path`, `id`, `rank`, `via`, `engine`만 들어가며 LLM이 선택한 문서를 `query read`로 직접 읽어야 합니다.
 
