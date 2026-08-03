@@ -22,7 +22,13 @@ DIRECTORIES = [
     "docs/concepts",
     "docs/references",
     "docs/vocabulary",
+    "docs/memory/l2",
     ".knowledge",
+    ".knowledge/index",
+    ".knowledge/private-memory/l0",
+    ".knowledge/private-memory/l1",
+    ".knowledge/private-memory/l2",
+    ".knowledge/private-memory/l3",
 ]
 
 
@@ -31,6 +37,8 @@ def main() -> int:
     parser.add_argument("repository", nargs="?", default=".")
     parser.add_argument("--embedding", choices=["disabled", "local", "remote"], default="disabled")
     parser.add_argument("--remote-content-allowed", action="store_true")
+    parser.add_argument("--owner", default="user:owner")
+    parser.add_argument("--team", default="team:repository")
     parser.add_argument("--dry-run", action="store_true")
     args = parser.parse_args()
 
@@ -59,6 +67,10 @@ def main() -> int:
     text_files = {
         "AGENTS.md": assets / "AGENTS.md",
         "docs/vocabulary/topics.yml": assets / "topics.yml",
+        ".knowledge/purpose.md": assets / "purpose.md",
+        ".knowledge/schema.md": assets / "schema.md",
+        ".knowledge/private-memory/.gitignore": assets / "private-memory.gitignore",
+        ".knowledge/index/.gitignore": assets / "index.gitignore",
     }
     for relative, source in text_files.items():
         target = root / relative
@@ -81,11 +93,27 @@ def main() -> int:
         embedding["enabled"] = args.embedding != "disabled"
         embedding["execution"] = "none" if args.embedding == "disabled" else args.embedding
         embedding["remote_content_allowed"] = bool(args.remote_content_allowed)
+        config["access_control"]["default_owner"] = args.owner
+        config["access_control"]["default_team"] = args.team
+        config["access_control"]["managers"] = [args.owner]
         if not args.dry_run:
             config_target.parent.mkdir(parents=True, exist_ok=True)
             with config_target.open("w", encoding="utf-8", newline="\n") as handle:
                 yaml.safe_dump(config, handle, allow_unicode=True, sort_keys=False)
         created.append(".knowledge/config.yml")
+
+    principals_target = root / ".knowledge" / "principals.yml"
+    if principals_target.exists():
+        skipped.append(".knowledge/principals.yml")
+    else:
+        with (assets / "principals.yml").open("r", encoding="utf-8") as handle:
+            principals = yaml.safe_load(handle)
+        principals["team"] = args.team
+        principals["users"] = [args.owner]
+        if not args.dry_run:
+            with principals_target.open("w", encoding="utf-8", newline="\n") as handle:
+                yaml.safe_dump(principals, handle, allow_unicode=True, sort_keys=False)
+        created.append(".knowledge/principals.yml")
 
     mode = "DRY-RUN" if args.dry_run else "CREATED"
     print(f"{mode} {len(created)} paths")

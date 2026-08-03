@@ -161,6 +161,11 @@ def main() -> int:
         if mode == "deny" or (execution == "remote" and mode != "allow"):
             skipped += 1
             continue
+        access = metadata.get("access") if isinstance(metadata.get("access"), dict) else {}
+        visibility = access.get("visibility", "team")
+        if execution == "remote" and visibility in {"private", "restricted", "agent"}:
+            skipped += 1
+            continue
 
         title = str(metadata.get("title", path.stem))
         if policy.get("content", "full") == "summary_only":
@@ -193,6 +198,9 @@ def main() -> int:
                     "applies_to": metadata.get("applies_to", []),
                     "reviewed": str(metadata.get("reviewed", "")),
                     "embedding_mode": mode,
+                    "visibility": visibility,
+                    "owner": access.get("owner"),
+                    "team": access.get("team"),
                 }
 
     reused = sum(

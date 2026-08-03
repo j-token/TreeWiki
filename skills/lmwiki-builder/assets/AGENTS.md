@@ -36,6 +36,13 @@ embedding:
 
 - 아직 없음 — 저장소에서 확인한 테스트·린트·수동 검증 명령을 기록한다.
 
+## 기억과 조회
+
+- L0–L3 개인 기억과 Persona는 기본적으로 `.knowledge/private-memory/`에 둔다.
+- 팀 공유가 확인된 L2 기억만 `docs/memory/l2/`에 둔다.
+- 조회 시 호출자의 `user:*`, `team:*`, `role:*`, `agent:*` 주체를 확인하고 ACL 필터를 먼저 적용한다.
+- `query`는 읽기 전용이다. `manage sync/reindex/migrate`는 등록된 manager가 사용자 허락을 받은 뒤에만 `--apply`를 사용한다.
+
 ## 하위 지도
 
 - 아직 없음 — 주요 영역이 루트 지도에서 2단계를 넘을 때 추가한다.
