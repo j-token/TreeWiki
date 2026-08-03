@@ -25,6 +25,8 @@ DIRECTORIES = [
     "docs/memory/l2",
     ".knowledge",
     ".knowledge/index",
+    ".knowledge/hooks",
+    ".knowledge/hooks/state",
     ".knowledge/private-memory/l0",
     ".knowledge/private-memory/l1",
     ".knowledge/private-memory/l2",
@@ -71,6 +73,7 @@ def main() -> int:
         ".knowledge/schema.md": assets / "schema.md",
         ".knowledge/private-memory/.gitignore": assets / "private-memory.gitignore",
         ".knowledge/index/.gitignore": assets / "index.gitignore",
+        ".knowledge/hooks/state/.gitignore": assets / "hook-state.gitignore",
     }
     for relative, source in text_files.items():
         target = root / relative
