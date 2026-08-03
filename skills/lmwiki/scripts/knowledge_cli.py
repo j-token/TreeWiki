@@ -35,14 +35,14 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "glossary_path": "docs/vocabulary/glossary.yml",
     "memory": {
         "enabled": True,
-        "capture": "hook",
+        "capture": "explicit",
         "shared_path": "docs/memory",
         "private_path": ".knowledge/private-memory",
         "levels": ["l0", "l1", "l2", "l3"],
         "persona_requires_sources": 2,
     },
     "hooks": {
-        "enabled": True,
+        "enabled": False,
         "execution": "same_thread",
         "memory_stages": ["l0", "l1", "l2"],
         "l3": {"enabled": True, "minimum_sources": 2},
