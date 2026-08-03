@@ -25,29 +25,10 @@ DEFAULT_HOOKS: dict[str, Any] = {
     "l3": {"enabled": True, "minimum_sources": 2},
     "runbook": {
         "enabled": True,
-        "require_no_feedback": True,
+        "require_user_confirmation": True,
         "status": "draft",
     },
 }
-
-FEEDBACK_MARKERS = (
-    "알려 주세요",
-    "알려주세요",
-    "선택해 주세요",
-    "선택해주세요",
-    "확인해 주세요",
-    "확인해주세요",
-    "승인해 주세요",
-    "승인해주세요",
-    "답해 주세요",
-    "답해주세요",
-    "진행할까요",
-    "어떻게 할까요",
-    "which do you prefer",
-    "please confirm",
-    "please choose",
-    "let me know",
-)
 
 
 def merge_missing(target: dict[str, Any], defaults: dict[str, Any]) -> dict[str, Any]:
@@ -280,23 +261,19 @@ def l3_prompt(
     )
 
 
-def requires_feedback(message: str) -> bool:
-    folded = message.casefold()
-    if any(marker.casefold() in folded for marker in FEEDBACK_MARKERS):
-        return True
-    lines = [line.strip() for line in message.splitlines() if line.strip()]
-    return bool(lines and lines[-1].endswith(("?", "？")))
-
-
-def runbook_prompt(root: Path, hooks: dict[str, Any]) -> str:
+def runbook_proposal_prompt(root: Path, hooks: dict[str, Any]) -> str:
     status = str(hooks.get("runbook", {}).get("status", "draft"))
     return (
-        "[LMWiki lifecycle hook: task-complete runbook]\n"
+        "[LMWiki lifecycle hook: runbook proposal review]\n"
         f"저장소: {root}\n{execution_instruction(hooks)}\n"
-        "원래 작업은 완료 후보이고 사용자에게 승인·선택·추가정보를 요구하지 않았습니다. 이번 작업에서 반복 가능한 "
-        "운영·복구 절차가 실제로 생겼는지 L2와 변경 파일을 기준으로 판단하세요. 절차가 생겼을 때만 기존 runbook을 "
-        f"갱신하거나 `{status}` runbook을 만들고 L2를 `derived_from`으로 연결하세요. 아직 검증 중인 가설, 일회성 "
-        "대화 또는 단순 선호를 runbook으로 승격하지 마세요. 생성·변경했다면 LMWiki 검증을 실행하세요."
+        "최초 완료 메시지, 사용자 요청, 도구 결과와 변경 파일을 보고 인수인계 경계 신호가 있는지 판단하세요. 신호는 "
+        "기능 구현·검증 완료, commit·push 요청 또는 완료, pull request 생성·갱신·병합, 반복 가능한 배포·장애 복구·"
+        "데이터 이관의 완료입니다. 신호가 없거나 아직 승인·선택·추가정보를 기다리는 중이면 질문 없이 원래 완료 "
+        "메시지를 유지하세요. 신호가 있고 같은 작업 단위에서 아직 묻지 않았다면 사용자에게 정확히 "
+        "`이번 작업을 인수인계용 runbook으로 남길까요?`라고 한 번 물으세요. 완료 뒤 commit·push 같은 신호가 "
+        "이어져도 같은 작업에는 다시 묻지 마세요. 이 제안 단계에서는 runbook 파일을 만들거나 기존 파일을 갱신하지 "
+        f"마세요. 사용자가 `만들기`를 명시적으로 선택한 뒤에만 `{status}` 초안을 작성하고, `건너뛰기`를 선택하면 "
+        "새로운 변경이 생기기 전까지 같은 작업으로 다시 묻지 마세요."
     )
 
 
@@ -310,7 +287,7 @@ def handle_user_prompt(
     if config["hooks"].get("enabled"):
         return additional_context(
             "UserPromptSubmit",
-            "LMWiki 생명주기 훅이 활성화되어 있습니다. 요청 작업을 정상 수행하세요. L0–L3와 runbook 후처리는 Stop에서 발화됩니다.",
+            "LMWiki 생명주기 훅이 활성화되어 있습니다. 요청 작업을 정상 수행하세요. L0–L3와 runbook 생성 여부 제안 검토는 Stop에서 발화됩니다. runbook은 사용자가 만들기를 명시적으로 선택하기 전에는 생성하거나 갱신하지 마세요.",
         )
     return None
 
@@ -353,16 +330,10 @@ def handle_stop(
         skipped.append("l3:no-eligible-subject")
 
     runbook = hooks.get("runbook") if isinstance(hooks.get("runbook"), dict) else {}
-    if runbook.get("enabled") and "runbook" not in emitted and not any(
-        str(item).startswith("runbook:") for item in skipped
-    ):
-        completion_message = str(current.get("completion_message", ""))
-        if runbook.get("require_no_feedback", True) and requires_feedback(completion_message):
-            skipped.append("runbook:feedback-required")
-        else:
-            emitted.append("runbook")
-            save_state(root, session_id, state)
-            return continuation(runbook_prompt(root, hooks))
+    if runbook.get("enabled") and "runbook_proposal" not in emitted:
+        emitted.append("runbook_proposal")
+        save_state(root, session_id, state)
+        return continuation(runbook_proposal_prompt(root, hooks))
 
     current["complete"] = True
     save_state(root, session_id, state)
@@ -372,10 +343,10 @@ def handle_stop(
 def handle_session_start(
     root: Path, payload: dict[str, Any], config: dict[str, Any], state: dict[str, Any]
 ) -> dict[str, Any] | None:
-    deferred = state.pop("deferred_runbook", None)
+    deferred = state.pop("deferred_runbook_proposal", None)
     if deferred and config["hooks"].get("enabled"):
         save_state(root, str(payload.get("session_id", "unknown")), state)
-        return additional_context("SessionStart", runbook_prompt(root, config["hooks"]))
+        return additional_context("SessionStart", runbook_proposal_prompt(root, config["hooks"]))
     return None
 
 
@@ -389,11 +360,8 @@ def handle_session_end(
     turns = state.get("turns") if isinstance(state.get("turns"), dict) else {}
     incomplete = [value for value in turns.values() if isinstance(value, dict) and not value.get("complete")]
     if incomplete:
-        latest = incomplete[-1]
-        message = str(latest.get("completion_message", ""))
-        if not runbook.get("require_no_feedback", True) or not requires_feedback(message):
-            state["deferred_runbook"] = True
-            save_state(root, str(payload.get("session_id", "unknown")), state)
+        state["deferred_runbook_proposal"] = True
+        save_state(root, str(payload.get("session_id", "unknown")), state)
     return None
 
 
