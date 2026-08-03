@@ -1,4 +1,6 @@
 interface:
   display_name: "LMWiki"
-  short_description: "최초 임베딩 선택을 저장하고 저장소 지식을 관리합니다"
-  default_prompt: "Use $lmwiki to build or manage repository knowledge, asking once about embeddings during initial setup and reusing the stored choice afterward."
+  short_description: "LMWiki 저장소에서 지식 규칙을 먼저 적용합니다"
+  default_prompt: "Use $lmwiki before repository work to load and apply the configured knowledge map and rules."
+policy:
+  allow_implicit_invocation: true
