@@ -4,7 +4,7 @@
 
 AI가 코드를 늘리는 속도에 비해 문서는 금방 낡습니다. LMWiki는 저장소 지도, 계약, 결정, runbook, 계층형 기억, Persona와 검증 근거를 코드에 연결해 관리합니다.
 
-스킬은 두 개로 나눴습니다. `lmwiki-builder`는 최초 구조 생성과 기존 문서 이관을 담당합니다. `lmwiki-steward`는 구축 이후의 일상 변경을 관리합니다.
+스킬은 `$lmwiki` 하나입니다. 저장소 상태와 요청에 따라 구축, 도입, 변경, 감사, 기억 또는 재색인 모드를 고르고 해당 모드에 필요한 세부 규칙만 읽습니다.
 
 ## 관리하는 정보
 
@@ -19,45 +19,33 @@ AI가 코드를 늘리는 속도에 비해 문서는 금방 낡습니다. LMWiki
 
 ## 설치
 
-[Skills CLI](https://github.com/vercel-labs/skills)로 두 스킬을 설치합니다.
+[Skills CLI](https://github.com/vercel-labs/skills)로 설치합니다.
 
 ```powershell
-npx skills add j-token/lmwiki --skill lmwiki-builder --skill lmwiki-steward
+npx skills add j-token/lmwiki --skill lmwiki
 ```
 
 Codex 전역에 복사 설치하려면 다음 명령을 사용합니다.
 
 ```powershell
-npx skills add j-token/lmwiki --skill lmwiki-builder --skill lmwiki-steward -g -a codex -y --copy
-```
-
-각 스킬을 따로 설치할 수도 있습니다.
-
-```powershell
-npx skills add j-token/lmwiki --skill lmwiki-builder
-npx skills add j-token/lmwiki --skill lmwiki-steward
+npx skills add j-token/lmwiki --skill lmwiki -g -a codex -y --copy
 ```
 
 ## 사용
 
-LMWiki 구조가 없는 저장소에는 builder를 사용합니다.
+LMWiki 구조가 없는 저장소의 최초 구축에 사용합니다.
 
 ```text
-$lmwiki-builder를 사용해서 이 저장소를 초기화하고 기존 문서도 이관해줘.
+$lmwiki를 사용해서 이 저장소를 초기화하고 기존 문서도 이관해줘.
 ```
 
-구축 이후에는 steward를 사용합니다.
+구축 이후의 변경에도 같은 스킬을 사용합니다.
 
 ```text
-$lmwiki-steward를 사용해서 인증 흐름을 수정하고 관련 계약과 runbook도 같이 관리해줘.
+$lmwiki를 사용해서 인증 흐름을 수정하고 관련 계약과 runbook도 같이 관리해줘.
 ```
 
-| 스킬 | 작업 |
-| --- | --- |
-| `lmwiki-builder` | 신규 구축, 기존 문서·기억 이관, 접근 정책, 임베딩 정책과 최초 색인 |
-| `lmwiki-steward` | ACL 기반 조회, 코드·문서 변경, 기억 증류, 감사, 동기화와 재색인 |
-
-steward는 LMWiki 구조가 없을 때 임의로 초기화하지 않습니다. builder가 필요하다고 보고하고 멈춥니다.
+루트 `SKILL.md`에는 모드 선택과 공통 안전 경계만 둡니다. 도입, 접근 제어, 메타데이터, 기억, 생명주기와 임베딩 세부 규칙은 직접 연결된 reference에 두고 관련 작업에서만 읽습니다.
 
 ## 문서 유형
 
@@ -112,13 +100,13 @@ access:
   owner: user:owner
   team: team:repository
   grants:
-    - subject: agent:builder
+    - subject: agent:lmwiki
       permissions: [read]
 ```
 
 ## 저장소 구조
 
-두 스킬은 대상 저장소에 다음 구조를 만들고 관리합니다.
+스킬은 대상 저장소에 다음 구조를 만들고 관리합니다.
 
 ```text
 AGENTS.md
@@ -161,8 +149,8 @@ docs/
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki-steward/scripts/knowledge_cli.py query search <repository-root> "인증" --principal user:owner --team team:repository
-python skills/lmwiki-steward/scripts/knowledge_cli.py query graph <repository-root> --principal user:owner --team team:repository
+python skills/lmwiki/scripts/knowledge_cli.py query search <repository-root> "인증" --principal user:owner --team team:repository
+python skills/lmwiki/scripts/knowledge_cli.py query graph <repository-root> --principal user:owner --team team:repository
 ```
 
 `query search`, `read`, `list`, `graph`는 파일을 변경하지 않습니다. `manage validate`도 읽기 전용입니다. `manage sync`, `reindex`, `migrate`는 호출 주체가 `access_control.managers`에 있어야 하며, `--apply`가 있어야 저장소를 변경합니다.
@@ -171,7 +159,7 @@ python skills/lmwiki-steward/scripts/knowledge_cli.py query graph <repository-ro
 
 ## 임베딩
 
-builder는 최초 구축 시 임베딩을 사용할지 한 번 묻습니다. 거절하거나 답하지 않아도 메타데이터, 통제어휘, 경로와 문서 관계를 이용한 검색은 동작합니다.
+최초 구축 시 임베딩을 사용할지 한 번 묻습니다. 거절하거나 답하지 않아도 메타데이터, 통제어휘, 경로와 문서 관계를 이용한 검색은 동작합니다.
 
 문서 외부 전송은 기본적으로 꺼져 있습니다. `local_only` 문서는 로컬에서만 처리하고 `deny` 문서는 청크 manifest에서도 제외합니다. Markdown이 원본이며 벡터 색인은 삭제한 뒤 다시 만들 수 있습니다.
 
@@ -185,22 +173,22 @@ Python과 PyYAML이 필요합니다. `python3`가 아니라 `python` 명령을 �
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki-builder/scripts/bootstrap_lmwiki.py <repository-root> --embedding disabled
+python skills/lmwiki/scripts/bootstrap_lmwiki.py <repository-root> --embedding disabled
 ```
 
 기존 LMWiki 저장소를 검증합니다.
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki-steward/scripts/validate_knowledge.py <repository-root>
+python skills/lmwiki/scripts/validate_knowledge.py <repository-root>
 ```
 
 임베딩을 사용하면 청크 manifest와 SQLite 검색 색인을 생성합니다.
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki-steward/scripts/build_embedding_index.py <repository-root>
-python skills/lmwiki-steward/scripts/build_search_index.py <repository-root>
+python skills/lmwiki/scripts/build_embedding_index.py <repository-root>
+python skills/lmwiki/scripts/build_search_index.py <repository-root>
 ```
 
 ## 현재 한계
