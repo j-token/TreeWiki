@@ -1,0 +1,4 @@
+interface:
+  display_name: "LMWiki 구축"
+  short_description: "코드 저장소에 LMWiki 지식 구조를 구축하고 기존 문서를 이관합니다"
+  default_prompt: "Use $lmwiki-builder to initialize or migrate this repository into an LMWiki knowledge structure."
