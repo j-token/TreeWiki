@@ -35,7 +35,7 @@ DIRECTORIES = [
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("repository", nargs="?", default=".")
-    parser.add_argument("--embedding", choices=["disabled", "local", "remote"], default="disabled")
+    parser.add_argument("--embedding", choices=["disabled", "local", "remote"], required=True)
     parser.add_argument("--remote-content-allowed", action="store_true")
     parser.add_argument("--owner", default="user:owner")
     parser.add_argument("--team", default="team:repository")
@@ -93,6 +93,7 @@ def main() -> int:
         embedding["enabled"] = args.embedding != "disabled"
         embedding["execution"] = "none" if args.embedding == "disabled" else args.embedding
         embedding["remote_content_allowed"] = bool(args.remote_content_allowed)
+        config["retrieval"]["bm25_enabled"] = args.embedding != "disabled"
         config["access_control"]["default_owner"] = args.owner
         config["access_control"]["default_team"] = args.team
         config["access_control"]["managers"] = [args.owner]
