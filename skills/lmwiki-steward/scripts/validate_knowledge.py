@@ -31,7 +31,7 @@ REQUIRED_FIELDS = {
     "reviewed",
 }
 SCOPED_TYPES = {"map", "contract", "runbook"}
-ALLOWED_TYPES = {"map", "contract", "decision", "runbook", "concept", "reference"}
+ALLOWED_TYPES = {"map", "contract", "decision", "runbook", "concept", "reference", "memory", "persona"}
 ALLOWED_STATUSES = {"draft", "active", "deprecated", "archived"}
 ALLOWED_AUTHORITIES = {"normative", "informative", "generated"}
 ALLOWED_RELATIONS = {
@@ -41,8 +41,13 @@ ALLOWED_RELATIONS = {
     "verified_by",
     "implemented_by",
     "related_to",
+    "distilled_from",
 }
-DOC_RELATIONS = {"derived_from", "depends_on", "supersedes", "related_to"}
+DOC_RELATIONS = {"derived_from", "depends_on", "supersedes", "related_to", "distilled_from"}
+ALLOWED_MEMORY_LEVELS = {"l0", "l1", "l2", "l3"}
+ALLOWED_VISIBILITIES = {"private", "team", "restricted", "agent"}
+ALLOWED_PERMISSIONS = {"read", "write", "manage"}
+SUBJECT_RE = re.compile(r"^(user|role|agent|team):[^:\\s]+$")
 LINK_RE = re.compile(r"\[[^]]+\]\(([^)]+)\)")
 FRONTMATTER_RE = re.compile(r"\A---\s*\r?\n(.*?)\r?\n---\s*(?:\r?\n|\Z)", re.DOTALL)
 
@@ -159,6 +164,79 @@ def main() -> int:
     records: dict[str, tuple[Path, dict[str, Any]]] = {}
     parsed: list[tuple[Path, dict[str, Any], str]] = []
     review_days = int(config.get("review_warning_days", 180))
+    memory_config = config.get("memory") if isinstance(config.get("memory"), dict) else {}
+    private_memory_path = str(memory_config.get("private_path", ".knowledge/private-memory")).rstrip("/")
+    persona_source_minimum = int(memory_config.get("persona_requires_sources", 2))
+    access_config = (
+        config.get("access_control") if isinstance(config.get("access_control"), dict) else {}
+    )
+    managers = access_config.get("managers", [access_config.get("default_owner", "user:owner")])
+    if not isinstance(managers, list) or not managers:
+        errors.append(".knowledge/config.yml: access_control.managers must be a non-empty array")
+    else:
+        for manager in managers:
+            if not isinstance(manager, str) or not SUBJECT_RE.match(manager):
+                errors.append(
+                    f".knowledge/config.yml: invalid access_control manager {manager!r}"
+                )
+
+    retrieval = config.get("retrieval") if isinstance(config.get("retrieval"), dict) else {}
+    bm25_enabled = retrieval.get("bm25_enabled", True)
+    if not isinstance(bm25_enabled, bool):
+        errors.append(".knowledge/config.yml: retrieval.bm25_enabled must be a boolean")
+    bm25_path = retrieval.get("bm25_index_path", ".knowledge/index/search.db")
+    if not isinstance(bm25_path, str) or not bm25_path.strip():
+        errors.append(".knowledge/config.yml: retrieval.bm25_index_path must be a non-empty string")
+    else:
+        normalized_bm25_path = bm25_path.replace("\\", "/")
+        path_parts = Path(normalized_bm25_path).parts
+        if (
+            Path(normalized_bm25_path).is_absolute()
+            or ".." in path_parts
+            or not normalized_bm25_path.startswith(".knowledge/index/")
+        ):
+            errors.append(
+                ".knowledge/config.yml: retrieval.bm25_index_path must stay under .knowledge/index/"
+            )
+    candidate_limit = retrieval.get("bm25_candidate_limit", 24)
+    result_limit = retrieval.get("bm25_result_limit", 12)
+    if (
+        not isinstance(candidate_limit, int)
+        or isinstance(candidate_limit, bool)
+        or not 1 <= candidate_limit <= 1000
+    ):
+        errors.append(
+            ".knowledge/config.yml: retrieval.bm25_candidate_limit must be an integer from 1 to 1000"
+        )
+    if (
+        not isinstance(result_limit, int)
+        or isinstance(result_limit, bool)
+        or not 1 <= result_limit <= 100
+    ):
+        errors.append(
+            ".knowledge/config.yml: retrieval.bm25_result_limit must be an integer from 1 to 100"
+        )
+    if (
+        isinstance(candidate_limit, int)
+        and not isinstance(candidate_limit, bool)
+        and isinstance(result_limit, int)
+        and not isinstance(result_limit, bool)
+        and candidate_limit < result_limit
+    ):
+        errors.append(
+            ".knowledge/config.yml: retrieval.bm25_candidate_limit must be at least bm25_result_limit"
+        )
+    if retrieval.get("bm25_query_mode", "high_recall") != "high_recall":
+        errors.append(".knowledge/config.yml: retrieval.bm25_query_mode must be high_recall")
+    if retrieval.get("result_content", "locations_only") != "locations_only":
+        errors.append(".knowledge/config.yml: retrieval.result_content must be locations_only")
+    graph_hops = retrieval.get("graph_hops", 1)
+    if (
+        not isinstance(graph_hops, int)
+        or isinstance(graph_hops, bool)
+        or not 0 <= graph_hops <= 3
+    ):
+        errors.append(".knowledge/config.yml: retrieval.graph_hops must be an integer from 0 to 3")
 
     for path in documents:
         rel = relative_posix(path, root)
@@ -230,10 +308,89 @@ def main() -> int:
             if embedding.get("content", "full") not in {"full", "summary_only"}:
                 errors.append(f"{rel}: invalid embedding.content {embedding.get('content')!r}")
 
+        provenance = metadata.get("provenance")
+        if provenance is not None:
+            if not isinstance(provenance, list):
+                errors.append(f"{rel}: provenance must be an array")
+            else:
+                for source_index, source in enumerate(provenance):
+                    if isinstance(source, str) and source:
+                        continue
+                    if not isinstance(source, dict):
+                        errors.append(f"{rel}: provenance[{source_index}] must be a string or mapping")
+                        continue
+                    source_path = source.get("source", source.get("path"))
+                    if not isinstance(source_path, str) or not source_path:
+                        errors.append(f"{rel}: provenance[{source_index}] requires source or path")
+
+        if doc_type in {"memory", "persona"}:
+            memory = metadata.get("memory")
+            if not isinstance(memory, dict):
+                errors.append(f"{rel}: memory must be a mapping for {doc_type}")
+            else:
+                level = memory.get("level")
+                if level not in ALLOWED_MEMORY_LEVELS:
+                    errors.append(f"{rel}: invalid memory.level {level!r}")
+                if doc_type == "persona" and level != "l3":
+                    errors.append(f"{rel}: persona must use memory.level l3")
+                confidence = memory.get("confidence")
+                if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or not 0 <= confidence <= 1:
+                    errors.append(f"{rel}: memory.confidence must be between 0 and 1")
+                if not isinstance(memory.get("subject"), str) or not memory.get("subject"):
+                    errors.append(f"{rel}: memory.subject must be a non-empty string")
+
+        access = metadata.get("access")
+        if access is None:
+            if doc_type in {"memory", "persona"}:
+                errors.append(f"{rel}: access must be a mapping for {doc_type}")
+        elif not isinstance(access, dict):
+            errors.append(f"{rel}: access must be a mapping")
+        else:
+            visibility = access.get("visibility")
+            if visibility not in ALLOWED_VISIBILITIES:
+                errors.append(f"{rel}: invalid access.visibility {visibility!r}")
+            owner = access.get("owner")
+            team = access.get("team")
+            if not isinstance(owner, str) or not owner.startswith("user:") or not SUBJECT_RE.match(owner):
+                errors.append(f"{rel}: access.owner must use user:<id> syntax")
+            if not isinstance(team, str) or not team.startswith("team:") or not SUBJECT_RE.match(team):
+                errors.append(f"{rel}: access.team must use team:<id> syntax")
+            grants = access.get("grants", [])
+            read_grants: list[str] = []
+            if not isinstance(grants, list):
+                errors.append(f"{rel}: access.grants must be an array")
+            else:
+                for grant_index, grant in enumerate(grants):
+                    if not isinstance(grant, dict):
+                        errors.append(f"{rel}: access.grants[{grant_index}] must be a mapping")
+                        continue
+                    subject = grant.get("subject")
+                    permissions = grant.get("permissions")
+                    if not isinstance(subject, str) or not SUBJECT_RE.match(subject):
+                        errors.append(f"{rel}: access.grants[{grant_index}].subject is invalid")
+                    if not isinstance(permissions, list) or not permissions or any(
+                        permission not in ALLOWED_PERMISSIONS for permission in permissions
+                    ):
+                        errors.append(f"{rel}: access.grants[{grant_index}].permissions is invalid")
+                    elif isinstance(subject, str) and "read" in permissions:
+                        read_grants.append(subject)
+            if visibility == "restricted" and not read_grants:
+                errors.append(f"{rel}: restricted access requires at least one read grant")
+            if visibility == "agent" and not any(subject.startswith("agent:") for subject in read_grants):
+                errors.append(f"{rel}: agent access requires at least one agent:* read grant")
+            if visibility in {"private", "restricted"} and not (
+                rel == private_memory_path or rel.startswith(private_memory_path + "/")
+            ):
+                errors.append(
+                    f"{rel}: {visibility} document must be stored under {private_memory_path}; "
+                    "frontmatter ACL does not restrict Git readers"
+                )
+
     for path, metadata, body in parsed:
         rel = relative_posix(path, root)
         relations = metadata.get("relations", [])
         verified = False
+        distilled_from = 0
         if isinstance(relations, list):
             for index, relation in enumerate(relations):
                 if not isinstance(relation, dict):
@@ -249,6 +406,8 @@ def main() -> int:
                     continue
                 if relation_type == "verified_by":
                     verified = True
+                if relation_type == "distilled_from":
+                    distilled_from += 1
                 if relation_type in DOC_RELATIONS and target not in records:
                     errors.append(f"{rel}: relation target document {target!r} not found")
                 elif relation_type not in DOC_RELATIONS and not path_exists(root, target):
@@ -261,6 +420,15 @@ def main() -> int:
 
         if metadata.get("type") == "contract" and metadata.get("status") == "active" and not verified:
             errors.append(f"{rel}: active contract requires at least one verified_by relation")
+
+        memory = metadata.get("memory") if isinstance(metadata.get("memory"), dict) else {}
+        level = memory.get("level")
+        if metadata.get("type") == "memory" and level in {"l1", "l2", "l3"} and distilled_from < 1:
+            errors.append(f"{rel}: {level} memory requires at least one distilled_from relation")
+        if metadata.get("type") == "persona" and distilled_from < persona_source_minimum:
+            errors.append(
+                f"{rel}: persona requires at least {persona_source_minimum} distilled_from relations"
+            )
 
         if path.name == "AGENTS.md":
             for raw_target in LINK_RE.findall(body):

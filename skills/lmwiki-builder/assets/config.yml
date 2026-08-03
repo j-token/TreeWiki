@@ -4,9 +4,34 @@ documents:
     - AGENTS.md
     - "**/AGENTS.md"
     - "docs/**/*.md"
+    - ".knowledge/private-memory/**/*.md"
   exclude: []
 vocabulary_path: docs/vocabulary/topics.yml
 review_warning_days: 180
+memory:
+  enabled: true
+  capture: explicit
+  shared_path: docs/memory
+  private_path: .knowledge/private-memory
+  levels: [l0, l1, l2, l3]
+  persona_requires_sources: 2
+access_control:
+  default_visibility: team
+  default_owner: user:owner
+  default_team: team:repository
+  managers: [user:owner]
+  principal_required: true
+  policy_enforcement: cooperative
+retrieval:
+  keyword_enabled: true
+  graph_hops: 1
+  max_results: 6
+  bm25_enabled: true
+  bm25_index_path: .knowledge/index/search.db
+  bm25_candidate_limit: 24
+  bm25_result_limit: 12
+  bm25_query_mode: high_recall
+  result_content: locations_only
 embedding:
   enabled: false
   execution: none

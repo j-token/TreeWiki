@@ -1,4 +1,4 @@
 interface:
   display_name: "LMWiki 관리"
-  short_description: "코드 변경과 계약·결정·운영 문서의 연결을 지속적으로 관리합니다"
-  default_prompt: "Use $lmwiki-steward to manage this repository change while preserving LMWiki contracts, decisions, validation, and search indexes."
+  short_description: "ACL 우선 SQLite BM25 조회와 지식·기억 생명주기를 관리합니다"
+  default_prompt: "Use $lmwiki-steward to find authorized document locations with SQLite BM25 and manage repository knowledge and memory."

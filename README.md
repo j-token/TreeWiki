@@ -2,7 +2,7 @@
 
 [English](README.md) | [한국어](README.ko.md)
 
-AI coding agents can add code faster than a team can keep documentation current. LMWiki keeps repository maps, contracts, decisions, runbooks, and validation links in the same Git history as the code.
+AI coding agents can add code faster than a team can keep documentation current. LMWiki keeps repository maps, contracts, decisions, runbooks, layered memory, personas, and validation links connected to the code.
 
 LMWiki is distributed as two Agent Skills. `lmwiki-builder` creates or migrates the knowledge structure. `lmwiki-steward` handles routine changes after setup.
 
@@ -12,7 +12,10 @@ LMWiki is distributed as two Agent Skills. `lmwiki-builder` creates or migrates 
 - Markdown frontmatter stores stable IDs, document types, status, topics, scope, and typed relationships.
 - Controlled vocabulary maps aliases such as `auth` and `login` to one topic key.
 - Validation catches duplicate IDs, broken links, invalid lifecycle dependencies, and active contracts without evidence.
-- Optional embedding manifests add semantic retrieval without replacing the Markdown source.
+- L0–L3 memory separates raw conversations, atomic facts, working scenarios, and durable personas.
+- User, team, role, and agent policies filter retrieval before ranking.
+- Read-only `query` commands are separate from mutation-capable `manage` commands.
+- When embeddings are enabled, a local SQLite FTS5/BM25 index finds a broad set of related document locations without replacing the Markdown source.
 
 ## Install
 
@@ -51,14 +54,14 @@ Use $lmwiki-steward to update this authentication flow and keep its contracts an
 
 | Skill | Work |
 | --- | --- |
-| `lmwiki-builder` | New setup, existing document migration, incomplete structure repair, embedding policy, and the first index |
-| `lmwiki-steward` | Code and document changes, audits, lifecycle updates, relationship repair, and reindexing |
+| `lmwiki-builder` | New setup, document and memory migration, access policy, embedding policy, and the first index |
+| `lmwiki-steward` | ACL-filtered queries, code and document changes, memory distillation, audits, lifecycle updates, sync, and reindexing |
 
 The steward does not create a missing LMWiki structure. It reports that the builder is required.
 
 ## Document model
 
-LMWiki uses six document types.
+LMWiki uses eight document types.
 
 | Type | Purpose |
 | --- | --- |
@@ -68,6 +71,8 @@ LMWiki uses six document types.
 | `runbook` | Record operational and recovery procedures |
 | `concept` | Explain repository-specific terms and mechanisms |
 | `reference` | Hold generated or external reference material |
+| `memory` | Store L0–L2 conversation and working memory |
+| `persona` | Store L3 durable collaboration preferences backed by multiple sources |
 
 Each managed Markdown file starts with YAML frontmatter:
 
@@ -95,6 +100,22 @@ embedding:
 ---
 ```
 
+Memory documents also declare their level and access policy:
+
+```yaml
+memory:
+  level: l2
+  subject: project:repository
+  confidence: 0.8
+access:
+  visibility: team
+  owner: user:owner
+  team: team:repository
+  grants:
+    - subject: agent:builder
+      permissions: [read]
+```
+
 ## Repository layout
 
 The skills create and maintain this layout in a target repository:
@@ -102,18 +123,51 @@ The skills create and maintain this layout in a target repository:
 ```text
 AGENTS.md
 .knowledge/
-└── config.yml
+├── config.yml
+├── purpose.md
+├── schema.md
+├── principals.yml
+├── index/
+│   └── .gitignore
+└── private-memory/
+    ├── l0/
+    ├── l1/
+    ├── l2/
+    └── l3/
 docs/
 ├── contracts/
 ├── decisions/
 ├── runbooks/
 ├── concepts/
 ├── references/
+├── memory/
+│   └── l2/
 └── vocabulary/
     └── topics.yml
 ```
 
 The root map should reach each major code area within two map links. Local maps add regional details without copying the root rules.
+
+## Memory and access
+
+- L0 preserves raw conversation evidence.
+- L1 stores one fact, preference, constraint, or event.
+- L2 restores a project or task scenario.
+- L3 stores a persona only after at least two independent L1 or L2 sources support it.
+
+Memory capture defaults to `explicit`. Private and restricted memory stays under the Git-ignored `.knowledge/private-memory/` path. Frontmatter ACLs control cooperative agent retrieval; they do not prevent a person with repository access from reading tracked files.
+
+## Query and manage
+
+```powershell
+$env:PYTHONUTF8='1'
+python skills/lmwiki-steward/scripts/knowledge_cli.py query search <repository-root> "authentication" --principal user:owner --team team:repository
+python skills/lmwiki-steward/scripts/knowledge_cli.py query graph <repository-root> --principal user:owner --team team:repository
+```
+
+`query search`, `read`, `list`, and `graph` never write files. `manage validate` is also read-only. `manage sync`, `reindex`, and `migrate` require a subject listed in `access_control.managers`; they also require `--apply` before mutating repository state.
+
+Search deliberately favors recall over a short, precise answer. With embeddings enabled it expands vocabulary aliases, prefixes, and Korean bigrams, retrieves up to 24 BM25 candidates, follows one relation hop, and returns up to 12 locations. Each result contains only `path`, `id`, `rank`, `via`, and `engine`; the LLM must use `query read` to inspect a selected document.
 
 ## Optional embeddings
 
@@ -121,7 +175,7 @@ The builder asks once whether the repository should use embeddings. A declined o
 
 Remote document transfer defaults to disabled. Documents marked `local_only` stay local, and documents marked `deny` do not enter the chunk manifest. Markdown remains the source of truth; the vector index can be deleted and rebuilt.
 
-The included index builder creates provider-neutral JSONL chunks. Model selection and vector storage follow the repository's existing stack. The skills do not invent a model ID or switch remote providers after a failure.
+The included index builders create provider-neutral JSONL chunks and a local SQLite FTS5/BM25 database. The database is enabled only with embeddings, is ignored by Git, and can be deleted and rebuilt. ACL-allowed document IDs are selected before BM25 ranking. Model selection and vector storage follow the repository's existing stack. The skills do not invent a model ID or switch remote providers after a failure.
 
 ## Validate
 
@@ -141,17 +195,20 @@ $env:PYTHONUTF8='1'
 python skills/lmwiki-steward/scripts/validate_knowledge.py <repository-root>
 ```
 
-Build the chunk manifest when embeddings are enabled:
+Build the chunk manifest and SQLite search index when embeddings are enabled:
 
 ```powershell
 $env:PYTHONUTF8='1'
 python skills/lmwiki-steward/scripts/build_embedding_index.py <repository-root>
+python skills/lmwiki-steward/scripts/build_search_index.py <repository-root>
 ```
 
 ## Current limits
 
 - The embedding builder produces chunks and hashes. Repository-specific code still connects those chunks to a model and vector store.
+- SQLite retrieval depends on Python's bundled SQLite having FTS5 support. It returns candidate locations, not snippets or generated answers.
 - The default review warning is 180 days. A date warning never archives a document automatically.
 - PyYAML is the only Python dependency.
+- Git-hosted ACL metadata cannot provide confidentiality to people who can read the repository; private storage or an authenticated external backend is required for enforcement.
 
 The metadata fields and retrieval thresholds are early defaults. They will change after more repositories expose where the rules are too strict or too loose.
