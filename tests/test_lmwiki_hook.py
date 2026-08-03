@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import sys
 import tempfile
 import unittest
@@ -39,7 +38,7 @@ class LmwikiHookTests(unittest.TestCase):
                 "l3": {"enabled": True, "minimum_sources": 2},
                 "runbook": {
                     "enabled": True,
-                    "require_no_feedback": True,
+                    "require_user_confirmation": True,
                     "status": "draft",
                 },
             },
@@ -58,7 +57,7 @@ class LmwikiHookTests(unittest.TestCase):
             "prompt": "기능을 구현해줘",
         }
 
-    def test_stop_emits_l0_l1_l2_then_runbook(self) -> None:
+    def test_stop_emits_l0_l1_l2_then_runbook_proposal_review(self) -> None:
         reasons = []
         for _ in range(4):
             output = lmwiki_hook.process_event(self.payload("Stop"))
@@ -67,7 +66,9 @@ class LmwikiHookTests(unittest.TestCase):
         self.assertIn("L0", reasons[0])
         self.assertIn("L1", reasons[1])
         self.assertIn("L2", reasons[2])
-        self.assertIn("runbook", reasons[3])
+        self.assertIn("runbook proposal review", reasons[3])
+        self.assertIn("이번 작업을 인수인계용 runbook으로 남길까요?", reasons[3])
+        self.assertIn("만들거나 기존 파일을 갱신하지", reasons[3])
         self.assertIsNone(lmwiki_hook.process_event(self.payload("Stop")))
 
     def test_l3_requires_programmatic_source_threshold(self) -> None:
@@ -85,17 +86,16 @@ class LmwikiHookTests(unittest.TestCase):
         outputs = [lmwiki_hook.process_event(self.payload("Stop")) for _ in range(4)]
         self.assertIn("L3 eligibility passed", str(outputs[3]["reason"]))
         output = lmwiki_hook.process_event(self.payload("Stop"))
-        self.assertIn("runbook", str(output["reason"]))
+        self.assertIn("runbook proposal review", str(output["reason"]))
 
-    def test_feedback_request_skips_runbook(self) -> None:
+    def test_unfinished_choice_reaches_signal_review_without_forcing_proposal(self) -> None:
         message = "구현 방향을 두 가지로 좁혔습니다. 어느 쪽으로 진행할까요?"
-        for _ in range(3):
-            self.assertIsNotNone(lmwiki_hook.process_event(self.payload("Stop", message)))
-        self.assertIsNone(lmwiki_hook.process_event(self.payload("Stop", message)))
-        state = json.loads(
-            lmwiki_hook.state_path(self.root, "session-1").read_text(encoding="utf-8")
-        )
-        self.assertIn("runbook:feedback-required", state["turns"]["turn-1"]["skipped"])
+        reasons = []
+        for _ in range(4):
+            output = lmwiki_hook.process_event(self.payload("Stop", message))
+            self.assertIsNotNone(output)
+            reasons.append(str(output["reason"]))
+        self.assertIn("아직 승인·선택·추가정보를 기다리는 중이면 질문 없이", reasons[3])
 
     def test_existing_persona_coverage_suppresses_l3(self) -> None:
         memory_dir = self.root / ".knowledge" / "private-memory"
@@ -125,7 +125,7 @@ class LmwikiHookTests(unittest.TestCase):
     def test_explicit_capture_does_not_emit_memory_layers(self) -> None:
         self.write_config(capture="explicit")
         output = lmwiki_hook.process_event(self.payload("Stop"))
-        self.assertIn("runbook", str(output["reason"]))
+        self.assertIn("runbook proposal review", str(output["reason"]))
 
     def test_agent_execution_has_same_thread_fallback(self) -> None:
         self.write_config(execution="agent")

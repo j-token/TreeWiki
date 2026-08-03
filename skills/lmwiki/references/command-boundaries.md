@@ -2,7 +2,7 @@
 
 ## 조회 명령
 
-`query search`, `query read`, `query list`, `query graph`는 파일을 변경하지 않는다. 모든 조회는 `--principal`, `--team`, `--agent`, `--role`로 전달된 주체에 ACL을 먼저 적용한다.
+`query search`, `query read`, `query list`, `query graph`, `query glossary`는 파일을 변경하지 않는다. 모든 조회는 `--principal`, `--team`, `--agent`, `--role`로 전달된 주체에 ACL을 먼저 적용한다.
 
 ## 관리 명령
 

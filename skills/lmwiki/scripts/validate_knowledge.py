@@ -60,6 +60,14 @@ def load_yaml(path: Path) -> dict[str, Any]:
     return value
 
 
+def load_glossary(path: Path) -> list[dict[str, Any]]:
+    payload = load_yaml(path)
+    terms = payload.get("terms")
+    if not isinstance(terms, list):
+        raise ValueError("glossary.terms must be an array")
+    return terms
+
+
 def parse_markdown(path: Path) -> tuple[dict[str, Any], str]:
     text = path.read_text(encoding="utf-8")
     match = FRONTMATTER_RE.match(text)
@@ -161,6 +169,38 @@ def main() -> int:
                 errors.append(f"vocabulary alias {alias!r}: shared by {previous} and {topic}")
             alias_owner[normalized] = str(topic)
 
+    glossary_path = root / str(config.get("glossary_path", "docs/vocabulary/glossary.yml"))
+    glossary: list[dict[str, Any]] = []
+    if glossary_path.exists():
+        try:
+            glossary = load_glossary(glossary_path)
+        except (OSError, UnicodeError, ValueError, yaml.YAMLError) as exc:
+            errors.append(f"{relative_posix(glossary_path, root)}: invalid glossary: {exc}")
+    elif documents:
+        errors.append(f"{relative_posix(glossary_path, root)}: glossary file not found")
+
+    glossary_terms: dict[str, int] = {}
+    for index, entry in enumerate(glossary):
+        label = f"glossary terms[{index}]"
+        if not isinstance(entry, dict):
+            errors.append(f"{label}: entry must be a mapping")
+            continue
+        term = entry.get("term")
+        description = entry.get("description")
+        if not isinstance(term, str) or not term.strip():
+            errors.append(f"{label}: term must be a non-empty string")
+        else:
+            normalized = term.strip().casefold()
+            previous = glossary_terms.get(normalized)
+            if previous is not None:
+                errors.append(
+                    f"{label}: duplicate term {term!r} also used by terms[{previous}]"
+                )
+            else:
+                glossary_terms[normalized] = index
+        if not isinstance(description, str) or not description.strip():
+            errors.append(f"{label}: description must be a non-empty string")
+
     records: dict[str, tuple[Path, dict[str, Any]]] = {}
     parsed: list[tuple[Path, dict[str, Any], str]] = []
     review_days = int(config.get("review_warning_days", 180))
@@ -203,9 +243,9 @@ def main() -> int:
     )
     if not isinstance(runbook_hook.get("enabled", True), bool):
         errors.append(".knowledge/config.yml: hooks.runbook.enabled must be a boolean")
-    if not isinstance(runbook_hook.get("require_no_feedback", True), bool):
+    if runbook_hook.get("require_user_confirmation", True) is not True:
         errors.append(
-            ".knowledge/config.yml: hooks.runbook.require_no_feedback must be a boolean"
+            ".knowledge/config.yml: hooks.runbook.require_user_confirmation must be true"
         )
     if runbook_hook.get("status", "draft") != "draft":
         errors.append(".knowledge/config.yml: hooks.runbook.status must be draft")

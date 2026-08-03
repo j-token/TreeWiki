@@ -18,13 +18,21 @@ except ModuleNotFoundError:
     print("ERROR PyYAML is required; install scripts/requirements.txt", file=sys.stderr)
     raise SystemExit(2)
 
-from validate_knowledge import load_yaml, managed_documents, parse_markdown, relative_posix
+from validate_knowledge import (
+    load_glossary,
+    load_yaml,
+    managed_documents,
+    parse_markdown,
+    relative_posix,
+)
 from build_search_index import search_locations
 
 
 TOKEN_RE = re.compile(r"[\w가-힣-]+", re.UNICODE)
 SUBJECT_RE = re.compile(r"^(user|role|agent|team):[^:\s]+$")
 DEFAULT_CONFIG: dict[str, Any] = {
+    "vocabulary_path": "docs/vocabulary/topics.yml",
+    "glossary_path": "docs/vocabulary/glossary.yml",
     "memory": {
         "enabled": True,
         "capture": "hook",
@@ -40,7 +48,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "l3": {"enabled": True, "minimum_sources": 2},
         "runbook": {
             "enabled": True,
-            "require_no_feedback": True,
+            "require_user_confirmation": True,
             "status": "draft",
         },
     },
@@ -429,6 +437,44 @@ def query_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def query_glossary(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve()
+    config = repository_config(root)
+    subjects = identity_subjects(args)
+    if not can_read({}, config, subjects):
+        print("NOT FOUND OR DENIED")
+        return 3
+
+    path = root / str(config.get("glossary_path", "docs/vocabulary/glossary.yml"))
+    entries = load_glossary(path)
+    query = args.term.strip().casefold() if args.term else ""
+    matches: list[tuple[int, int, dict[str, Any]]] = []
+    for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            continue
+        term = entry.get("term")
+        description = entry.get("description")
+        if not isinstance(term, str) or not isinstance(description, str):
+            continue
+        folded_term = term.strip().casefold()
+        folded_description = description.casefold()
+        if query and query not in folded_term and query not in folded_description:
+            continue
+        priority = 0 if query and query == folded_term else 1 if query in folded_term else 2
+        matches.append((priority, index, {"term": term, "description": description}))
+
+    matches.sort(key=lambda item: (item[0], item[1]))
+    if query and not matches:
+        print("NOT FOUND")
+        return 3
+    for _, _, entry in matches:
+        if args.json:
+            print(json.dumps(entry, ensure_ascii=False, separators=(",", ":")))
+        else:
+            print(f"{entry['term']}\t{entry['description']}")
+    return 0
+
+
 def manage_validate(args: argparse.Namespace) -> int:
     script = Path(__file__).with_name("validate_knowledge.py")
     command = [sys.executable, str(script), str(Path(args.repository).resolve())]
@@ -645,6 +691,13 @@ def build_parser() -> argparse.ArgumentParser:
     graph.add_argument("--include-inactive", action="store_true")
     add_identity_arguments(graph)
     graph.set_defaults(handler=query_graph)
+
+    glossary = queries.add_parser("glossary")
+    glossary.add_argument("repository")
+    glossary.add_argument("term", nargs="?")
+    glossary.add_argument("--json", action="store_true")
+    add_identity_arguments(glossary)
+    glossary.set_defaults(handler=query_glossary)
 
     manage = groups.add_parser("manage", help="Validation and explicitly applied mutations")
     managers = manage.add_subparsers(dest="manage_command", required=True)

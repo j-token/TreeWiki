@@ -41,8 +41,9 @@ embedding:
 - L0–L3 개인 기억과 Persona는 기본적으로 `.knowledge/private-memory/`에 둔다.
 - 팀 공유가 확인된 L2 기억만 `docs/memory/l2/`에 둔다.
 - L0–L2는 Codex Stop 훅이 순서대로 발화한다. L3는 같은 subject의 활성 L1/L2 근거가 두 개 이상일 때만 프로그램이 발화를 연다.
-- 최초 완료 메시지가 승인·선택·추가정보를 요구하지 않을 때만 runbook 후처리를 발화하며 새 runbook은 `draft`로 시작한다.
+- 완료·commit·push·pull request 같은 인수인계 경계 신호가 보이면 AI가 같은 작업 단위에서 runbook 생성 여부를 한 번 묻는다. 사용자가 `만들기`를 선택한 뒤에만 `draft`를 만든다.
 - 조회 시 호출자의 `user:*`, `team:*`, `role:*`, `agent:*` 주체를 확인하고 ACL 필터를 먼저 적용한다.
+- 저장소 고유 명칭은 `docs/vocabulary/glossary.yml`에서 확인하고 `query glossary`로 조회한다.
 - `query`는 읽기 전용이다. `manage sync/reindex/migrate`는 등록된 manager가 사용자 허락을 받은 뒤에만 `--apply`를 사용한다.
 
 ## 하위 지도
@@ -52,3 +53,4 @@ embedding:
 ## 변경 규칙
 
 - 계약이 적용되는 코드를 바꾸면 관련 계약과 검증 근거를 함께 검토한다.
+- 저장소 고유 명칭을 새로 도입하거나 뜻을 바꾸면 용어집을 함께 갱신한다.

@@ -13,10 +13,11 @@ During the first LMWiki setup, the skill asks once whether to enable embeddings 
 - `AGENTS.md` files point agents to code areas, active contracts, and validation commands.
 - Markdown frontmatter stores stable IDs, document types, status, topics, scope, and typed relationships.
 - Controlled vocabulary maps aliases such as `auth` and `login` to one topic key.
+- The glossary maps repository-specific terms to descriptions so people and AI agents name the same thing consistently.
 - Validation catches duplicate IDs, broken links, invalid lifecycle dependencies, and active contracts without evidence.
 - Stop hooks emit L0 raw capture, L1 facts, and L2 work scenes in order.
 - L3 is emitted only after code checks the evidence threshold for a durable persona.
-- Only completed work that does not require user feedback reaches the final runbook review.
+- At completion, commit, push, or pull-request boundaries, the agent asks once per work unit whether to create a runbook and drafts one only after the user opts in.
 - User, team, role, and agent policies filter retrieval before ranking.
 - Read-only `query` commands are separate from mutation-capable `manage` commands.
 - When embeddings are enabled, a local SQLite FTS5/BM25 index finds a broad set of related document locations without replacing the Markdown source.
@@ -145,7 +146,8 @@ docs/
 ├── memory/
 │   └── l2/
 └── vocabulary/
-    └── topics.yml
+    ├── topics.yml
+    └── glossary.yml
 ```
 
 The root map should reach each major code area within two map links. Local maps add regional details without copying the root rules.
@@ -157,7 +159,7 @@ The root map should reach each major code area within two map links. Local maps 
 - L2 restores a project or task scenario.
 - L3 stores a persona only after at least two independent L1 or L2 sources support it.
 
-Memory capture defaults to `hook`. A Codex `Stop` hook emits L0→L1→L2 in order. Code emits the L3 review only after finding at least two active L1/L2 sources for the same subject. The final runbook review runs only when the original completion message does not request approval, a choice, or more information, and new runbooks always start as `draft`.
+Memory capture defaults to `hook`. A Codex `Stop` hook emits L0→L1→L2 in order. Code emits the L3 review only after finding at least two active L1/L2 sources for the same subject. The final stage reviews completion, commit, push, and pull-request signals. When a signal exists, the agent asks once per work unit whether to keep a runbook and creates a `draft` only after the user opts in.
 
 Private and restricted memory stays under the Git-ignored `.knowledge/private-memory/` path. Frontmatter ACLs control cooperative agent retrieval; they do not prevent a person with repository access from reading tracked files.
 
@@ -168,10 +170,11 @@ The installer writes the hook definition and runner once to global Codex paths `
 ```powershell
 $env:PYTHONUTF8='1'
 python skills/lmwiki/scripts/knowledge_cli.py query search <repository-root> "authentication" --principal user:owner --team team:repository
+python skills/lmwiki/scripts/knowledge_cli.py query glossary <repository-root> "workspace" --principal user:owner --team team:repository
 python skills/lmwiki/scripts/knowledge_cli.py query graph <repository-root> --principal user:owner --team team:repository
 ```
 
-`query search`, `read`, `list`, and `graph` never write files. `manage validate` is also read-only. `manage sync`, `reindex`, and `migrate` require a subject listed in `access_control.managers`; they also require `--apply` before mutating repository state.
+`query search`, `read`, `list`, `graph`, and `glossary` never write files. `query glossary` lists all entries when the term is omitted, or matches against terms and descriptions when it is provided. `manage validate` is also read-only and checks missing terms, missing descriptions, and duplicate terms. `manage sync`, `reindex`, and `migrate` require a subject listed in `access_control.managers`; they also require `--apply` before mutating repository state.
 
 Search deliberately favors recall over a short, precise answer. With embeddings enabled it expands vocabulary aliases, prefixes, and Korean bigrams, retrieves up to 24 BM25 candidates, follows one relation hop, and returns up to 12 locations. Each result contains only `path`, `id`, `rank`, `via`, and `engine`; the LLM must use `query read` to inspect a selected document.
 
