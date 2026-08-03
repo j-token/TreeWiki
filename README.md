@@ -6,6 +6,8 @@ AI coding agents can add code faster than a team can keep documentation current.
 
 LMWiki is distributed as one Agent Skill. `$lmwiki` selects a bootstrap, adoption, change, audit, memory, or reindex mode from the repository state and the request. Detailed rules are loaded only when that mode needs them.
 
+During the first LMWiki setup, the skill asks once whether to enable embeddings and the local SQLite BM25 location index. It stores the answer in `.knowledge/config.yml`; later runs reuse it without asking again.
+
 ## What it manages
 
 - `AGENTS.md` files point agents to code areas, active contracts, and validation commands.
@@ -159,7 +161,7 @@ Search deliberately favors recall over a short, precise answer. With embeddings 
 
 ## Optional embeddings
 
-During initial setup, LMWiki asks once whether the repository should use embeddings. A declined or unanswered choice keeps metadata, vocabulary, path, and relationship search enabled.
+During initial setup, LMWiki waits for an explicit yes or no before creating the structure. A yes enables local embeddings and SQLite BM25 by default. A no disables both while retaining metadata, vocabulary, keyword, path, and relationship retrieval. The answer is stored in `.knowledge/config.yml`, so later invocations do not ask again.
 
 Remote document transfer defaults to disabled. Documents marked `local_only` stay local, and documents marked `deny` do not enter the chunk manifest. Markdown remains the source of truth; the vector index can be deleted and rebuilt.
 
@@ -173,8 +175,10 @@ Create a new structure from this repository checkout:
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki/scripts/bootstrap_lmwiki.py <repository-root> --embedding disabled
+python skills/lmwiki/scripts/bootstrap_lmwiki.py <repository-root> --embedding local
 ```
+
+Use `--embedding disabled` when the initial answer is no.
 
 Validate an existing LMWiki repository:
 

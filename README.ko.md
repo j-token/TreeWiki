@@ -6,6 +6,8 @@ AI가 코드를 늘리는 속도에 비해 문서는 금방 낡습니다. LMWiki
 
 스킬은 `$lmwiki` 하나입니다. 저장소 상태와 요청에 따라 구축, 도입, 변경, 감사, 기억 또는 재색인 모드를 고르고 해당 모드에 필요한 세부 규칙만 읽습니다.
 
+LMWiki를 처음 구축할 때 임베딩과 로컬 SQLite BM25 위치 색인을 사용할지 한 번 묻습니다. 답은 `.knowledge/config.yml`에 저장하고 이후 실행에서는 다시 묻지 않습니다.
+
 ## 관리하는 정보
 
 - `AGENTS.md`는 코드 영역, 활성 계약과 검증 명령을 연결합니다.
@@ -159,7 +161,7 @@ python skills/lmwiki/scripts/knowledge_cli.py query graph <repository-root> --pr
 
 ## 임베딩
 
-최초 구축 시 임베딩을 사용할지 한 번 묻습니다. 거절하거나 답하지 않아도 메타데이터, 통제어휘, 경로와 문서 관계를 이용한 검색은 동작합니다.
+최초 구축에서는 구조를 만들기 전에 명시적인 예/아니요 답을 기다립니다. 예라고 답하면 로컬 임베딩과 SQLite BM25를 기본으로 켭니다. 아니요라고 답하면 둘 다 끄되 메타데이터·통제어휘·키워드·경로·관계 검색은 유지합니다. 답은 `.knowledge/config.yml`에 저장하므로 이후에는 다시 묻지 않습니다.
 
 문서 외부 전송은 기본적으로 꺼져 있습니다. `local_only` 문서는 로컬에서만 처리하고 `deny` 문서는 청크 manifest에서도 제외합니다. Markdown이 원본이며 벡터 색인은 삭제한 뒤 다시 만들 수 있습니다.
 
@@ -173,8 +175,10 @@ Python과 PyYAML이 필요합니다. `python3`가 아니라 `python` 명령을 �
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki/scripts/bootstrap_lmwiki.py <repository-root> --embedding disabled
+python skills/lmwiki/scripts/bootstrap_lmwiki.py <repository-root> --embedding local
 ```
+
+최초 질문에 아니요라고 답하면 `--embedding disabled`를 사용합니다.
 
 기존 LMWiki 저장소를 검증합니다.
 
