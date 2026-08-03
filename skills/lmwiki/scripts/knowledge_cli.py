@@ -27,11 +27,22 @@ SUBJECT_RE = re.compile(r"^(user|role|agent|team):[^:\s]+$")
 DEFAULT_CONFIG: dict[str, Any] = {
     "memory": {
         "enabled": True,
-        "capture": "explicit",
+        "capture": "hook",
         "shared_path": "docs/memory",
         "private_path": ".knowledge/private-memory",
         "levels": ["l0", "l1", "l2", "l3"],
         "persona_requires_sources": 2,
+    },
+    "hooks": {
+        "enabled": True,
+        "execution": "same_thread",
+        "memory_stages": ["l0", "l1", "l2"],
+        "l3": {"enabled": True, "minimum_sources": 2},
+        "runbook": {
+            "enabled": True,
+            "require_no_feedback": True,
+            "status": "draft",
+        },
     },
     "access_control": {
         "default_visibility": "team",
@@ -538,6 +549,8 @@ def manage_migrate(args: argparse.Namespace) -> int:
         added.append("documents.include[private-memory]")
     directories = [
         "docs/memory/l2",
+        ".knowledge/hooks",
+        ".knowledge/hooks/state",
         ".knowledge/index",
         ".knowledge/private-memory/l0",
         ".knowledge/private-memory/l1",
@@ -549,6 +562,7 @@ def manage_migrate(args: argparse.Namespace) -> int:
     owner = str(access.get("default_owner", "user:owner"))
     team = str(access.get("default_team", "team:repository"))
     support_files: dict[Path, str] = {
+        root / ".knowledge" / "hooks" / "state" / ".gitignore": "*\n!.gitignore\n",
         root / ".knowledge" / "index" / ".gitignore": "*\n!.gitignore\n",
         root / ".knowledge" / "private-memory" / ".gitignore": "*\n!.gitignore\n",
         root / ".knowledge" / "purpose.md": (

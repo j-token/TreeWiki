@@ -14,7 +14,9 @@ During the first LMWiki setup, the skill asks once whether to enable embeddings 
 - Markdown frontmatter stores stable IDs, document types, status, topics, scope, and typed relationships.
 - Controlled vocabulary maps aliases such as `auth` and `login` to one topic key.
 - Validation catches duplicate IDs, broken links, invalid lifecycle dependencies, and active contracts without evidence.
-- L0–L3 memory separates raw conversations, atomic facts, working scenarios, and durable personas.
+- Stop hooks emit L0 raw capture, L1 facts, and L2 work scenes in order.
+- L3 is emitted only after code checks the evidence threshold for a durable persona.
+- Only completed work that does not require user feedback reaches the final runbook review.
 - User, team, role, and agent policies filter retrieval before ranking.
 - Read-only `query` commands are separate from mutation-capable `manage` commands.
 - When embeddings are enabled, a local SQLite FTS5/BM25 index finds a broad set of related document locations without replacing the Markdown source.
@@ -25,6 +27,13 @@ Install the skill with the open [Skills CLI](https://github.com/vercel-labs/skil
 
 ```powershell
 npx skills add j-token/lmwiki --skill lmwiki
+```
+
+Install the global Codex hook once from the installed skill or this checkout:
+
+```powershell
+$env:PYTHONUTF8='1'
+python skills/lmwiki/scripts/install_global_hooks.py --fallback-repository C:\path\to\central-wiki
 ```
 
 For a global Codex installation:
@@ -119,6 +128,9 @@ AGENTS.md
 ├── principals.yml
 ├── index/
 │   └── .gitignore
+├── hooks/
+│   └── state/
+│       └── .gitignore
 └── private-memory/
     ├── l0/
     ├── l1/
@@ -145,7 +157,11 @@ The root map should reach each major code area within two map links. Local maps 
 - L2 restores a project or task scenario.
 - L3 stores a persona only after at least two independent L1 or L2 sources support it.
 
-Memory capture defaults to `explicit`. Private and restricted memory stays under the Git-ignored `.knowledge/private-memory/` path. Frontmatter ACLs control cooperative agent retrieval; they do not prevent a person with repository access from reading tracked files.
+Memory capture defaults to `hook`. A Codex `Stop` hook emits L0→L1→L2 in order. Code emits the L3 review only after finding at least two active L1/L2 sources for the same subject. The final runbook review runs only when the original completion message does not request approval, a choice, or more information, and new runbooks always start as `draft`.
+
+Private and restricted memory stays under the Git-ignored `.knowledge/private-memory/` path. Frontmatter ACLs control cooperative agent retrieval; they do not prevent a person with repository access from reading tracked files.
+
+The installer writes the hook definition and runner once to global Codex paths `~/.codex/hooks.json` and `~/.codex/hooks/lmwiki_hook.py`. It uses the nearest repository with `.knowledge/config.yml`, or the central wiki selected during installation when the current task has no local LMWiki repository. Review and trust the global hook with `/hooks` in Codex before it can run. Set `hooks.execution` to `same_thread` or `agent`; agent mode requests delegation first and falls back to the current thread when the runtime cannot delegate.
 
 ## Query and manage
 

@@ -14,7 +14,9 @@ LMWiki를 처음 구축할 때 임베딩과 로컬 SQLite BM25 위치 색인을 
 - Markdown frontmatter에는 문서 ID, 유형, 상태, 주제, 적용 범위와 관계를 기록합니다.
 - 통제어휘는 `auth`, `login` 같은 이명을 하나의 주제 키에 연결합니다.
 - 검증기는 중복 ID, 끊어진 링크, 잘못된 상태 의존과 검증 근거가 없는 활성 계약을 찾습니다.
-- L0–L3는 대화 원문, 단일 사실, 작업 장면과 장기 Persona를 분리합니다.
+- Stop 훅은 L0 원문, L1 사실, L2 작업 장면을 순서대로 발화합니다.
+- L3는 프로그램이 근거 수를 검사한 뒤 장기 Persona 검토를 발화합니다.
+- 사용자 피드백이 필요하지 않은 완료 작업만 마지막 runbook 검토로 보냅니다.
 - 사용자·팀·역할·에이전트 정책은 검색 점수를 계산하기 전에 조회 범위를 거릅니다.
 - 읽기 전용 `query` 명령과 파일을 바꿀 수 있는 `manage` 명령을 분리합니다.
 - 임베딩을 허용하면 로컬 SQLite FTS5/BM25 색인이 관련 문서 위치를 넓게 찾습니다. Markdown 원본을 대체하지 않습니다.
@@ -25,6 +27,13 @@ LMWiki를 처음 구축할 때 임베딩과 로컬 SQLite BM25 위치 색인을 
 
 ```powershell
 npx skills add j-token/lmwiki --skill lmwiki
+```
+
+Codex 전역 훅은 설치된 스킬 또는 이 저장소 체크아웃에서 한 번 설치합니다.
+
+```powershell
+$env:PYTHONUTF8='1'
+python skills/lmwiki/scripts/install_global_hooks.py --fallback-repository C:\path\to\central-wiki
 ```
 
 Codex 전역에 복사 설치하려면 다음 명령을 사용합니다.
@@ -119,6 +128,9 @@ AGENTS.md
 ├── principals.yml
 ├── index/
 │   └── .gitignore
+├── hooks/
+│   └── state/
+│       └── .gitignore
 └── private-memory/
     ├── l0/
     ├── l1/
@@ -145,7 +157,11 @@ docs/
 - L2는 프로젝트나 작업 장면을 복원합니다.
 - L3 Persona는 서로 다른 L1 또는 L2 근거가 두 개 이상일 때만 만듭니다.
 
-기억 캡처 기본값은 `explicit`입니다. 개인·제한 기억은 Git에서 제외되는 `.knowledge/private-memory/`에 둡니다. frontmatter ACL은 에이전트 조회를 거르는 정책이며, 저장소를 읽을 수 있는 사람의 파일 접근을 차단하지는 못합니다.
+기억 캡처 기본값은 `hook`입니다. Codex `Stop` 훅이 L0→L1→L2를 순차 발화하고, 프로그램이 같은 subject의 활성 L1/L2 근거를 두 개 이상 확인했을 때만 L3 검토를 발화합니다. 최초 완료 메시지가 승인·선택·추가정보를 요구하지 않을 때만 마지막 runbook 검토가 실행되며 새 runbook은 `draft`로 시작합니다.
+
+개인·제한 기억은 Git에서 제외되는 `.knowledge/private-memory/`에 둡니다. frontmatter ACL은 에이전트 조회를 거르는 정책이며, 저장소를 읽을 수 있는 사람의 파일 접근을 차단하지는 못합니다.
+
+훅 정의와 실행기는 Codex 전역의 `~/.codex/hooks.json`, `~/.codex/hooks/lmwiki_hook.py`에 한 번 설치됩니다. 현재 경로의 상위에 `.knowledge/config.yml`이 있으면 해당 저장소를 사용하고, 없으면 설치 시 지정한 중앙 위키를 사용합니다. Codex에서 `/hooks`를 열어 전역 훅을 검토하고 신뢰해야 실행됩니다. `hooks.execution`은 `same_thread` 또는 `agent`이며, `agent`는 위임을 우선하고 런타임이 지원하지 않으면 같은 스레드로 폴백합니다.
 
 ## 조회와 관리
 

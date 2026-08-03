@@ -167,6 +167,48 @@ def main() -> int:
     memory_config = config.get("memory") if isinstance(config.get("memory"), dict) else {}
     private_memory_path = str(memory_config.get("private_path", ".knowledge/private-memory")).rstrip("/")
     persona_source_minimum = int(memory_config.get("persona_requires_sources", 2))
+    memory_capture = memory_config.get("capture", "explicit")
+    if memory_capture not in {"disabled", "explicit", "hook"}:
+        errors.append(
+            ".knowledge/config.yml: memory.capture must be disabled, explicit, or hook"
+        )
+
+    hook_config = config.get("hooks") if isinstance(config.get("hooks"), dict) else {}
+    hook_enabled = hook_config.get("enabled", False)
+    if not isinstance(hook_enabled, bool):
+        errors.append(".knowledge/config.yml: hooks.enabled must be a boolean")
+    if hook_config.get("execution", "same_thread") not in {"same_thread", "agent"}:
+        errors.append(".knowledge/config.yml: hooks.execution must be same_thread or agent")
+    hook_stages = hook_config.get("memory_stages", ["l0", "l1", "l2"])
+    if (
+        not isinstance(hook_stages, list)
+        or any(stage not in {"l0", "l1", "l2"} for stage in hook_stages)
+        or len(set(hook_stages)) != len(hook_stages)
+    ):
+        errors.append(
+            ".knowledge/config.yml: hooks.memory_stages must contain unique l0, l1, or l2 values"
+        )
+    l3_hook = hook_config.get("l3") if isinstance(hook_config.get("l3"), dict) else {}
+    if not isinstance(l3_hook.get("enabled", True), bool):
+        errors.append(".knowledge/config.yml: hooks.l3.enabled must be a boolean")
+    l3_minimum = l3_hook.get("minimum_sources", persona_source_minimum)
+    if (
+        not isinstance(l3_minimum, int)
+        or isinstance(l3_minimum, bool)
+        or l3_minimum < 2
+    ):
+        errors.append(".knowledge/config.yml: hooks.l3.minimum_sources must be an integer >= 2")
+    runbook_hook = (
+        hook_config.get("runbook") if isinstance(hook_config.get("runbook"), dict) else {}
+    )
+    if not isinstance(runbook_hook.get("enabled", True), bool):
+        errors.append(".knowledge/config.yml: hooks.runbook.enabled must be a boolean")
+    if not isinstance(runbook_hook.get("require_no_feedback", True), bool):
+        errors.append(
+            ".knowledge/config.yml: hooks.runbook.require_no_feedback must be a boolean"
+        )
+    if runbook_hook.get("status", "draft") != "draft":
+        errors.append(".knowledge/config.yml: hooks.runbook.status must be draft")
     access_config = (
         config.get("access_control") if isinstance(config.get("access_control"), dict) else {}
     )
