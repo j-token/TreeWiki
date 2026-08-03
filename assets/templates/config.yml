@@ -1,0 +1,19 @@
+version: 1
+documents:
+  include:
+    - AGENTS.md
+    - "**/AGENTS.md"
+    - "docs/**/*.md"
+  exclude: []
+vocabulary_path: docs/vocabulary/topics.yml
+review_warning_days: 180
+embedding:
+  enabled: false
+  execution: none
+  remote_content_allowed: false
+  provider: null
+  model: null
+  index_path: .knowledge/index/
+  chunk_target_tokens: 800
+  chunk_max_tokens: 1000
+  chunk_overlap_tokens: 120
