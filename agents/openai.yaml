@@ -1,4 +1,0 @@
-interface:
-  display_name: "저장소 지식 관리자"
-  short_description: "AGENTS.md와 문서 메타데이터로 코드 지식을 관리합니다"
-  default_prompt: "Use $repository-knowledge-steward to organize this repository knowledge and keep code, contracts, decisions, and runbooks connected."
