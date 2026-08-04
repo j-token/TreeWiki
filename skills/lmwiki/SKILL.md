@@ -23,6 +23,8 @@ LMWiki 저장소의 모든 저장소 작업 요청에서는 사용자가 과거 
 4. 지도와 후보 문서의 관계를 따라 적용되는 활성 계약·결정·기억·runbook과 검증 근거를 작업에 반영한다.
 5. 검색 결과가 없거나 색인이 낡았어도 원본 지도 탐색은 계속하며, 찾지 못한 지식을 추측해 존재한다고 말하지 않는다.
 
+검색 질의와 별도로 `query preferences`를 실행해 현재 사용자의 활성 L3 Persona와 `preference`, `conditional-action`, `constraint` L1 위치를 받고, 각 결과를 `query read`로 읽는다. 현재 작업 주제와 어휘가 겹치지 않아도 이 단계는 생략하지 않는다.
+
 같은 작업 단위에서 이미 읽은 근거가 현재 요청을 충분히 포괄하면 재사용할 수 있다. 요청의 주제나 대상 경로가 달라지면 다시 검색한다. 이 자동 조회는 읽기 전용이며 기억 저장, 동기화 또는 재색인 승인을 뜻하지 않는다.
 
 ## 1. 상태와 모드 선택
@@ -74,6 +76,7 @@ bootstrap 명령에는 답을 `--embedding local` 또는 `--embedding disabled`�
 - 기억 캡처 기본값은 `explicit`이다. LLM이 작업 완료 후보를 판단해 사용자에게 저장 여부를 묻고, 사용자가 다음 메시지에서 명시적으로 확인한 뒤에만 L0–L2를 순서대로 처리한다. Stop 훅은 기억 저장 트리거로 사용하지 않는다. 개인·제한 기억은 Git에서 제외된 `.knowledge/private-memory/`에 둔다.
 - L3는 사용자 확인 뒤 `query l3-candidates`로 같은 subject의 활성 L1/L2 근거 수를 확인한 뒤에만 검토한다. 후보가 있어도 독립된 작업에서 반복된 안정적 협업 선호가 아니면 Persona를 만들지 않는다. runbook은 완료·commit·push·pull request 같은 인수인계 경계 신호에서 같은 작업 단위에 한 번만 제안하고, 사용자가 `만들기`를 선택한 뒤에만 `draft`로 시작한다.
 - 외부 전송을 허용받지 않으면 로컬 처리만 사용하고, 확인되지 않은 provider나 model ID를 만들지 않는다.
+- 관리 대상 지식을 추가·변경하면 `glossary_terms`와 `query glossary-candidates`로 용어집 영향을 반드시 검토한다. 결과는 용어 추가, 설명 갱신, 변경 불필요 중 하나로 완료 보고에 남긴다.
 
 ## 5. 실행 진입점
 
@@ -84,21 +87,24 @@ $env:PYTHONUTF8='1'
 python <skill-path>/scripts/bootstrap_lmwiki.py <repository-root> --embedding local --owner user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query search <repository-root> "<query>" --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query read <repository-root> "<path-or-id>" --principal user:<id> --team team:<id>
+python <skill-path>/scripts/knowledge_cli.py query preferences <repository-root> --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query glossary <repository-root> "<용어>" --principal user:<id> --team team:<id>
+python <skill-path>/scripts/knowledge_cli.py query glossary-candidates <repository-root> --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query l3-candidates <repository-root> --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py manage validate <repository-root>
 python <skill-path>/scripts/knowledge_cli.py manage migrate <repository-root> --principal user:<id> --team team:<id>
+python <skill-path>/scripts/knowledge_cli.py manage memory-finalize <repository-root> --principal user:<id> --team team:<id>
 ```
 
 검색은 문서 위치만 반환한다. 필요한 후보는 `query read`로 직접 연다. 구조 변경 후 검증 오류가 있으면 완료로 보고하지 않는다.
 최초 질문의 답이 아니요이면 bootstrap 예시의 `local` 대신 `disabled`를 사용한다.
-스킬 변경을 저장소 로컬 복사본에 반영할 때는 새 스킬 경로의 CLI로 `manage migrate ... --sync-skill-copy` 드라이런을 실행하고, 사용자 승인 뒤 `--apply`를 추가한다. 이 명령은 `skills-lock.json`을 바꾸지 않으므로 원래 설치 관리자의 잠금 갱신 절차를 별도로 따른다.
+스킬 변경을 저장소 로컬 복사본에 반영할 때는 새 스킬 경로의 CLI로 `manage migrate ... --sync-skill-copy` 드라이런을 실행한다. 실제 전역 설치본은 `--sync-global-skill-copy`로 별도 드라이런하고, 사용자 승인 뒤에만 `--apply`를 추가한다. 두 경로 모두 파일을 삭제하지 않으며 `skills-lock.json`은 원래 설치 관리자로 갱신한다.
 
 ## 6. 완료 보고
 
 현재 사용자 요청 전체가 완료 후보인지 먼저 판단한다. 아직 직접 수행할 작업이 남았거나 승인·선택·추가정보를 기다리면 기억 저장을 묻지 않는다. 완료 후보이면 결과 보고 끝에 `이 작업을 마친 것으로 보고 기억을 저장할까요?`라고 한 번 묻고 `저장하기`와 `계속 작업`을 안내한다. 이 질문을 한 턴에는 기억 파일을 만들지 않는다.
 
-다음 사용자 메시지가 독립된 짧은 긍정 답변일 때만 `memory` 모드로 L0–L3를 처리한다. L0–L2를 처리한 뒤 `query l3-candidates` 결과가 있을 때만 L3 독립성을 검토한다. 긍정 표현에 새 지시가 붙거나 사용자가 계속 작업을 선택하면 저장하지 않고 현재 작업을 이어간다.
+다음 사용자 메시지가 독립된 짧은 긍정 답변일 때만 `memory` 모드로 L0–L3를 처리한다. L1에서는 일반 사실뿐 아니라 작업 선호와 “조건 → 행동” 규칙을 각각 `preference`, `conditional-action`, `constraint` 후보로 반드시 검토한다. L0–L2를 처리한 뒤 `query l3-candidates` 결과가 있을 때만 L3 독립성을 검토한다. 기억 파일을 쓴 뒤 같은 저장 승인 범위에서 `manage memory-finalize --apply`로 검증과 파생 색인 갱신까지 마친다. 긍정 표현에 새 지시가 붙거나 사용자가 계속 작업을 선택하면 저장하지 않고 현재 작업을 이어간다.
 
 - 선택한 모드와 변경한 경로
 - 적용한 계약·결정·지도와 검증 근거

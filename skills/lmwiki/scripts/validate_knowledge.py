@@ -45,6 +45,7 @@ ALLOWED_RELATIONS = {
 }
 DOC_RELATIONS = {"derived_from", "depends_on", "supersedes", "related_to", "distilled_from"}
 ALLOWED_MEMORY_LEVELS = {"l0", "l1", "l2", "l3"}
+ALLOWED_MEMORY_KINDS = {"fact", "preference", "conditional-action", "constraint", "event", "context"}
 ALLOWED_VISIBILITIES = {"private", "team", "restricted", "agent"}
 ALLOWED_PERMISSIONS = {"read", "write", "manage"}
 SUBJECT_RE = re.compile(r"^(user|role|agent|team):[^:\\s]+$")
@@ -381,6 +382,16 @@ def main() -> int:
         if isinstance(summary, str) and len(re.findall(r"[.!?](?:\s|$)", summary)) > 2:
             warnings.append(f"{rel}: summary appears longer than two sentences")
 
+        glossary_refs = metadata.get("glossary_terms", [])
+        if not isinstance(glossary_refs, list) or any(
+            not isinstance(term, str) or not term.strip() for term in glossary_refs
+        ):
+            errors.append(f"{rel}: glossary_terms must be an array of non-empty strings")
+        else:
+            for term in glossary_refs:
+                if term.strip().casefold() not in glossary_terms:
+                    warnings.append(f"{rel}: unregistered glossary term {term!r}")
+
         embedding = metadata.get("embedding", {})
         if embedding is not None and not isinstance(embedding, dict):
             errors.append(f"{rel}: embedding must be a mapping")
@@ -420,6 +431,11 @@ def main() -> int:
                     errors.append(f"{rel}: memory.confidence must be between 0 and 1")
                 if not isinstance(memory.get("subject"), str) or not memory.get("subject"):
                     errors.append(f"{rel}: memory.subject must be a non-empty string")
+                kind = memory.get("kind")
+                if kind is not None and kind not in ALLOWED_MEMORY_KINDS:
+                    errors.append(f"{rel}: invalid memory.kind {kind!r}")
+                if level == "l1" and kind is None:
+                    warnings.append(f"{rel}: l1 memory should declare memory.kind")
 
         access = metadata.get("access")
         if access is None:
