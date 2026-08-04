@@ -1,6 +1,6 @@
 ---
 name: lmwiki
-description: AGENTS.md 지도, 유형화된 Markdown, L0–L3 기억과 Persona, ACL, SQLite BM25 위치 검색과 승인 기반 관리 명령으로 LMWiki를 구축하고 운영합니다. 현재 작업 경로 또는 상위 경로에 `.knowledge/config.yml`이 있는 LMWiki 저장소에서 코드 작성, 문서 수정, 조사, 진단, 검토, Git 작업 등 저장소 작업을 시작할 때 사용자가 LMWiki를 언급하지 않아도 항상 먼저 사용합니다. LMWiki가 없는 저장소의 최초 초기화, 기존 문서 이관, 구조 복구를 요청할 때도 사용합니다.
+description: AGENTS.md 지도, 유형화된 Markdown, L0–L3 기억과 Persona, ACL, SQLite BM25 위치 검색과 승인 기반 관리 명령으로 LMWiki를 구축하고 운영합니다. 현재 작업 경로 또는 상위 경로에 `.knowledge/config.yml`이 있는 LMWiki 저장소에서 코드 작성, 문서 수정, 조사, 진단, 검토, Git 작업 등 저장소 작업을 시작할 때 사용자가 LMWiki나 과거 문서를 기억하거나 언급하지 않아도 항상 먼저 사용하고 관련 지식을 자동 조회합니다. LMWiki가 없는 저장소의 최초 초기화, 기존 문서 이관, 구조 복구를 요청할 때도 사용합니다.
 ---
 
 # LMWiki
@@ -12,6 +12,18 @@ description: AGENTS.md 지도, 유형화된 Markdown, L0–L3 기억과 Persona,
 현재 작업 경로 또는 상위 경로에 `.knowledge/config.yml`이 있으면 사용자 요청에 `$lmwiki`가 없어도 이 스킬을 적용한다. 코드·문서 변경뿐 아니라 조사, 진단, 검토와 Git 작업도 저장소 작업에 포함한다.
 
 실질적인 저장소 작업 전에 루트 `AGENTS.md`, `.knowledge/config.yml`, Git 상태를 확인하고 아래 표에서 모드를 고른다. LMWiki가 없는 저장소에서 초기화·이관·복구 요청도 같은 순서로 처리한다.
+
+### 사용자 대신 관련 지식 찾기
+
+LMWiki 저장소의 모든 저장소 작업 요청에서는 사용자가 과거 결정, 문서 이름, 경로나 검색어를 기억할 것이라고 가정하지 않는다. 실질적인 조사·판단·수정 또는 최종 답변 전에 다음 조회를 수행한다.
+
+1. 사용자 요청, 작업 대상 경로, 저장소 고유 명칭과 현재 작업 맥락에서 검색 질의를 만든다.
+2. 호출자의 `user:*`, `team:*`, 선택적 `role:*`, `agent:*`를 전달해 `query search`를 실행한다.
+3. 반환된 위치 가운데 현재 요청과 관련된 후보를 `query read`로 직접 읽는다.
+4. 지도와 후보 문서의 관계를 따라 적용되는 활성 계약·결정·기억·runbook과 검증 근거를 작업에 반영한다.
+5. 검색 결과가 없거나 색인이 낡았어도 원본 지도 탐색은 계속하며, 찾지 못한 지식을 추측해 존재한다고 말하지 않는다.
+
+같은 작업 단위에서 이미 읽은 근거가 현재 요청을 충분히 포괄하면 재사용할 수 있다. 요청의 주제나 대상 경로가 달라지면 다시 검색한다. 이 자동 조회는 읽기 전용이며 기억 저장, 동기화 또는 재색인 승인을 뜻하지 않는다.
 
 ## 1. 상태와 모드 선택
 
@@ -71,6 +83,7 @@ Windows PowerShell에서는 UTF-8 모드와 `python`을 사용한다.
 $env:PYTHONUTF8='1'
 python <skill-path>/scripts/bootstrap_lmwiki.py <repository-root> --embedding local --owner user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query search <repository-root> "<query>" --principal user:<id> --team team:<id>
+python <skill-path>/scripts/knowledge_cli.py query read <repository-root> "<path-or-id>" --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query glossary <repository-root> "<용어>" --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query l3-candidates <repository-root> --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py manage validate <repository-root>
