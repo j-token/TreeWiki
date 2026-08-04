@@ -57,10 +57,10 @@ bootstrap 명령에는 답을 `--embedding local` 또는 `--embedding disabled`�
 
 - Markdown과 frontmatter를 권위 있는 원본으로 유지한다.
 - 조회 전에 호출자의 `user:*`, `team:*`, 선택적 `role:*`, `agent:*`를 확인하고 ACL을 점수 계산보다 먼저 적용한다.
-- `query search`, `read`, `list`, `graph`, `glossary`와 `manage validate`는 읽기 전용이다.
+- `query search`, `read`, `list`, `graph`, `glossary`, `l3-candidates`와 `manage validate`는 읽기 전용이다.
 - `manage sync`, `reindex`, `migrate`는 manager 주체가 사용자 허락을 받은 뒤에만 `--apply`를 사용한다.
 - 기억 캡처 기본값은 `explicit`이다. LLM이 작업 완료 후보를 판단해 사용자에게 저장 여부를 묻고, 사용자가 다음 메시지에서 명시적으로 확인한 뒤에만 L0–L2를 순서대로 처리한다. Stop 훅은 기억 저장 트리거로 사용하지 않는다. 개인·제한 기억은 Git에서 제외된 `.knowledge/private-memory/`에 둔다.
-- L3는 프로그램이 같은 subject의 활성 L1/L2 근거 수를 확인한 뒤에만 발화한다. runbook은 완료·commit·push·pull request 같은 인수인계 경계 신호에서 같은 작업 단위에 한 번만 제안하고, 사용자가 `만들기`를 선택한 뒤에만 `draft`로 시작한다.
+- L3는 사용자 확인 뒤 `query l3-candidates`로 같은 subject의 활성 L1/L2 근거 수를 확인한 뒤에만 검토한다. 후보가 있어도 독립된 작업에서 반복된 안정적 협업 선호가 아니면 Persona를 만들지 않는다. runbook은 완료·commit·push·pull request 같은 인수인계 경계 신호에서 같은 작업 단위에 한 번만 제안하고, 사용자가 `만들기`를 선택한 뒤에만 `draft`로 시작한다.
 - 외부 전송을 허용받지 않으면 로컬 처리만 사용하고, 확인되지 않은 provider나 model ID를 만들지 않는다.
 
 ## 5. 실행 진입점
@@ -72,17 +72,20 @@ $env:PYTHONUTF8='1'
 python <skill-path>/scripts/bootstrap_lmwiki.py <repository-root> --embedding local --owner user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query search <repository-root> "<query>" --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py query glossary <repository-root> "<용어>" --principal user:<id> --team team:<id>
+python <skill-path>/scripts/knowledge_cli.py query l3-candidates <repository-root> --principal user:<id> --team team:<id>
 python <skill-path>/scripts/knowledge_cli.py manage validate <repository-root>
+python <skill-path>/scripts/knowledge_cli.py manage migrate <repository-root> --principal user:<id> --team team:<id>
 ```
 
 검색은 문서 위치만 반환한다. 필요한 후보는 `query read`로 직접 연다. 구조 변경 후 검증 오류가 있으면 완료로 보고하지 않는다.
 최초 질문의 답이 아니요이면 bootstrap 예시의 `local` 대신 `disabled`를 사용한다.
+스킬 변경을 저장소 로컬 복사본에 반영할 때는 새 스킬 경로의 CLI로 `manage migrate ... --sync-skill-copy` 드라이런을 실행하고, 사용자 승인 뒤 `--apply`를 추가한다. 이 명령은 `skills-lock.json`을 바꾸지 않으므로 원래 설치 관리자의 잠금 갱신 절차를 별도로 따른다.
 
 ## 6. 완료 보고
 
 현재 사용자 요청 전체가 완료 후보인지 먼저 판단한다. 아직 직접 수행할 작업이 남았거나 승인·선택·추가정보를 기다리면 기억 저장을 묻지 않는다. 완료 후보이면 결과 보고 끝에 `이 작업을 마친 것으로 보고 기억을 저장할까요?`라고 한 번 묻고 `저장하기`와 `계속 작업`을 안내한다. 이 질문을 한 턴에는 기억 파일을 만들지 않는다.
 
-다음 사용자 메시지가 독립된 짧은 긍정 답변일 때만 `memory` 모드로 L0–L3를 처리한다. 긍정 표현에 새 지시가 붙거나 사용자가 계속 작업을 선택하면 저장하지 않고 현재 작업을 이어간다.
+다음 사용자 메시지가 독립된 짧은 긍정 답변일 때만 `memory` 모드로 L0–L3를 처리한다. L0–L2를 처리한 뒤 `query l3-candidates` 결과가 있을 때만 L3 독립성을 검토한다. 긍정 표현에 새 지시가 붙거나 사용자가 계속 작업을 선택하면 저장하지 않고 현재 작업을 이어간다.
 
 - 선택한 모드와 변경한 경로
 - 적용한 계약·결정·지도와 검증 근거

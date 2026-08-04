@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import json
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -30,7 +31,9 @@ from build_search_index import search_locations
 
 TOKEN_RE = re.compile(r"[\w가-힣-]+", re.UNICODE)
 SUBJECT_RE = re.compile(r"^(user|role|agent|team):[^:\s]+$")
+CURRENT_CONFIG_VERSION = 2
 DEFAULT_CONFIG: dict[str, Any] = {
+    "version": CURRENT_CONFIG_VERSION,
     "vocabulary_path": "docs/vocabulary/topics.yml",
     "glossary_path": "docs/vocabulary/glossary.yml",
     "memory": {
@@ -475,6 +478,80 @@ def query_glossary(args: argparse.Namespace) -> int:
     return 0
 
 
+def l3_candidates(
+    records: list[dict[str, Any]], minimum_sources: int, subject: str | None = None
+) -> dict[str, list[str]]:
+    grouped: dict[str, set[str]] = {}
+    covered: dict[str, set[str]] = {}
+    for record in records:
+        metadata = record["metadata"]
+        memory = metadata.get("memory") if isinstance(metadata.get("memory"), dict) else {}
+        memory_subject = memory.get("subject")
+        doc_id = metadata.get("id")
+        if (
+            metadata.get("type") == "memory"
+            and metadata.get("status") == "active"
+            and memory.get("level") in {"l1", "l2"}
+            and isinstance(memory_subject, str)
+            and isinstance(doc_id, str)
+            and (subject is None or memory_subject == subject)
+        ):
+            grouped.setdefault(memory_subject, set()).add(doc_id)
+        if (
+            metadata.get("type") != "persona"
+            or metadata.get("status") != "active"
+            or memory.get("level") != "l3"
+            or not isinstance(memory_subject, str)
+            or (subject is not None and memory_subject != subject)
+        ):
+            continue
+        relations = metadata.get("relations")
+        if not isinstance(relations, list):
+            continue
+        for relation in relations:
+            if (
+                isinstance(relation, dict)
+                and relation.get("type") == "distilled_from"
+                and isinstance(relation.get("target"), str)
+            ):
+                covered.setdefault(memory_subject, set()).add(str(relation["target"]))
+    return {
+        memory_subject: sorted(doc_ids)
+        for memory_subject, doc_ids in sorted(grouped.items())
+        if len(doc_ids) >= minimum_sources
+        and not doc_ids.issubset(covered.get(memory_subject, set()))
+    }
+
+
+def query_l3_candidates(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve()
+    config = repository_config(root)
+    subjects = identity_subjects(args)
+    records = allowed_records(load_records(root, config), config, subjects, include_inactive=True)
+    memory = config.get("memory") if isinstance(config.get("memory"), dict) else {}
+    hooks = config.get("hooks") if isinstance(config.get("hooks"), dict) else {}
+    l3 = hooks.get("l3") if isinstance(hooks.get("l3"), dict) else {}
+    minimum = max(2, int(l3.get("minimum_sources", memory.get("persona_requires_sources", 2))))
+    candidates = l3_candidates(records, minimum, args.subject)
+    if not candidates:
+        print("NO ELIGIBLE L3 CANDIDATES")
+        return 0
+    for memory_subject, evidence_ids in candidates.items():
+        item = {
+            "subject": memory_subject,
+            "minimum_sources": minimum,
+            "evidence_ids": evidence_ids,
+        }
+        if args.json:
+            print(json.dumps(item, ensure_ascii=False, separators=(",", ":")))
+        else:
+            print(
+                f"{memory_subject}\tminimum_sources={minimum}\t"
+                f"evidence={','.join(evidence_ids)}"
+            )
+    return 0
+
+
 def manage_validate(args: argparse.Namespace) -> int:
     script = Path(__file__).with_name("validate_knowledge.py")
     command = [sys.executable, str(script), str(Path(args.repository).resolve())]
@@ -585,7 +662,16 @@ def manage_migrate(args: argparse.Namespace) -> int:
         print("ERROR .knowledge/config.yml not found; use lmwiki bootstrap mode")
         return 1
     config = load_yaml(config_path)
+    raw_version = config.get("version", 1)
+    if not isinstance(raw_version, int) or isinstance(raw_version, bool) or raw_version < 1:
+        raise ValueError(".knowledge/config.yml version must be a positive integer")
+    if raw_version > CURRENT_CONFIG_VERSION:
+        raise ValueError(
+            f"repository config version {raw_version} is newer than supported version "
+            f"{CURRENT_CONFIG_VERSION}; update the lmwiki skill first"
+        )
     added = merge_missing(config, DEFAULT_CONFIG)
+    config["version"] = CURRENT_CONFIG_VERSION
     require_repository_manager(root, config, args)
     documents = config.setdefault("documents", {})
     includes = documents.setdefault("include", ["AGENTS.md", "**/AGENTS.md", "docs/**/*.md"])
@@ -626,6 +712,18 @@ def manage_migrate(args: argparse.Namespace) -> int:
         ),
     }
     missing_files = [path for path in support_files if not path.exists()]
+    skill_source = Path(__file__).resolve().parents[1]
+    skill_target = root / ".agents" / "skills" / "lmwiki"
+    skill_updates: list[tuple[Path, Path]] = []
+    if args.sync_skill_copy:
+        for source in sorted(skill_source.rglob("*")):
+            if not source.is_file() or "__pycache__" in source.parts or source.suffix == ".pyc":
+                continue
+            relative = source.relative_to(skill_source)
+            target = skill_target / relative
+            if not target.exists() or source.read_bytes() != target.read_bytes():
+                skill_updates.append((source, target))
+    print(f"CONFIG VERSION {raw_version} -> {CURRENT_CONFIG_VERSION}")
     print(f"CONFIG KEYS TO ADD {len(added)}")
     for key in added:
         print(f"  + {key}")
@@ -635,6 +733,11 @@ def manage_migrate(args: argparse.Namespace) -> int:
     print(f"SUPPORT FILES TO CREATE {len(missing_files)}")
     for path in missing_files:
         print(f"  + {relative_posix(path, root)}")
+    print(f"SKILL FILES TO UPDATE {len(skill_updates)}")
+    for _, path in skill_updates:
+        print(f"  ~ {relative_posix(path, root)}")
+    if args.sync_skill_copy and (root / "skills-lock.json").exists():
+        print("NOTE skills-lock.json is not modified; refresh it with the original skill installer")
     if not args.apply:
         print("DRY-RUN: pass --apply only after the user authorizes file changes")
         return 0
@@ -643,9 +746,12 @@ def manage_migrate(args: argparse.Namespace) -> int:
     for path in missing_files:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(support_files[path], encoding="utf-8", newline="\n")
+    for source, target in skill_updates:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
     with config_path.open("w", encoding="utf-8", newline="\n") as handle:
         yaml.safe_dump(config, handle, allow_unicode=True, sort_keys=False)
-    print("APPLIED migration defaults")
+    print(f"APPLIED migration to config version {CURRENT_CONFIG_VERSION}")
     return 0
 
 
@@ -699,6 +805,13 @@ def build_parser() -> argparse.ArgumentParser:
     add_identity_arguments(glossary)
     glossary.set_defaults(handler=query_glossary)
 
+    l3_query = queries.add_parser("l3-candidates")
+    l3_query.add_argument("repository")
+    l3_query.add_argument("--subject")
+    l3_query.add_argument("--json", action="store_true")
+    add_identity_arguments(l3_query)
+    l3_query.set_defaults(handler=query_l3_candidates)
+
     manage = groups.add_parser("manage", help="Validation and explicitly applied mutations")
     managers = manage.add_subparsers(dest="manage_command", required=True)
 
@@ -722,6 +835,11 @@ def build_parser() -> argparse.ArgumentParser:
     migrate = managers.add_parser("migrate")
     migrate.add_argument("repository")
     migrate.add_argument("--apply", action="store_true")
+    migrate.add_argument(
+        "--sync-skill-copy",
+        action="store_true",
+        help="sync this CLI's lmwiki skill into repository .agents/skills/lmwiki",
+    )
     add_identity_arguments(migrate)
     migrate.set_defaults(handler=manage_migrate)
     return parser
