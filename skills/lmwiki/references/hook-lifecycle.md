@@ -16,10 +16,11 @@ Codex `Stop`은 응답 하나가 끝났다는 런타임 신호일 뿐 사용자 
 ## 확인 뒤 처리 순서
 
 1. L0: 확인받은 작업 단위의 사용자 원문과 도구 근거를 private memory로 캡처한다.
-2. L1: L0에서 다시 쓸 가치가 있는 사실·선호·제약·사건을 원자 단위로 증류한다.
+2. L1: L0에서 다시 쓸 가치가 있는 사실·사건뿐 아니라 작업 선호, 제약과 조건→행동 규칙을 원자 단위로 증류하고 `memory.kind`를 기록한다.
 3. L2: 프로젝트나 업무를 재개할 때 복원할 장면을 L1에서 구성한다.
-4. L3: `query l3-candidates`를 실행해 ACL 적용 뒤 같은 subject의 활성 L1/L2 근거가 최소 두 개인지 확인한다. 후보가 있을 때만 서로 다른 작업에서 반복된 안정적 협업 선호인지 독립성을 검토하고 Persona 생성 여부를 결정한다.
+4. L3: `query l3-candidates`를 실행해 ACL 적용 뒤 같은 subject의 활성 L1/L2가 서로 다른 최상위 provenance를 최소 두 개 갖는지 확인한다. 같은 L0에서 파생된 L1과 L2는 한 근거다.
 5. runbook 제안: 완료·commit·push·pull request 또는 반복 가능한 운영·복구 작업의 완료 신호가 있으면 별도로 생성 여부를 한 번 묻는다.
+6. 검증·색인: 기억 파일 작성 뒤 `manage memory-finalize --apply`를 실행해 검증과 BM25 등 파생 색인 갱신을 하나의 저장 흐름으로 끝낸다.
 
 `memory.capture`의 기본값은 `explicit`이다. 개인·제한 기억은 Git에서 제외된 `.knowledge/private-memory/`에 둔다. L0의 provenance는 확인 답변 턴이 아니라 사용자가 완료를 확인한 원래 작업 단위를 가리킨다.
 

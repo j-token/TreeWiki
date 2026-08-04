@@ -14,6 +14,7 @@ reviewed: YYYY-MM-DD
 memory:
   level: l1
   subject: user:owner
+  kind: preference
   confidence: 0.8
 access:
   visibility: private

@@ -95,6 +95,62 @@ class GlossaryTests(unittest.TestCase):
             self.assertIn("duplicate term", result.stdout)
             self.assertIn("description must be a non-empty string", result.stdout)
 
+    def test_glossary_candidates_reports_declared_unregistered_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            self.bootstrap(repository)
+            document = repository / "docs" / "concepts" / "memory-core.md"
+            document.parent.mkdir(parents=True, exist_ok=True)
+            document.write_text(
+                "---\n"
+                "id: CONCEPT-MEMORY-CORE-001\n"
+                "title: Memory Core\n"
+                "type: concept\nstatus: active\nauthority: informative\n"
+                "topics: [repository-knowledge-management]\n"
+                "summary: 기억 계층을 관리한다.\nrelations: []\n"
+                "reviewed: 2026-08-04\n"
+                "glossary_terms: [용어집, Memory Core]\n"
+                "---\n\n# Memory Core\n",
+                encoding="utf-8",
+            )
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS / "knowledge_cli.py"),
+                    "query",
+                    "glossary-candidates",
+                    str(repository),
+                    "--json",
+                    "--principal",
+                    "user:owner",
+                    "--team",
+                    "team:repository",
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn('"term":"Memory Core"', result.stdout)
+            self.assertNotIn('"term":"용어집"', result.stdout)
+
+            validation = subprocess.run(
+                [
+                    sys.executable,
+                    str(SCRIPTS / "knowledge_cli.py"),
+                    "manage",
+                    "validate",
+                    str(repository),
+                ],
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertEqual(validation.returncode, 0, validation.stdout + validation.stderr)
+            self.assertIn("unregistered glossary term 'Memory Core'", validation.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

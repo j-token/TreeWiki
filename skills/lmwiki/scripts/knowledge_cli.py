@@ -478,10 +478,112 @@ def query_glossary(args: argparse.Namespace) -> int:
     return 0
 
 
+def query_glossary_candidates(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve()
+    config = repository_config(root)
+    records = allowed_records(load_records(root, config), config, identity_subjects(args), True)
+    glossary_path = root / str(config.get("glossary_path", "docs/vocabulary/glossary.yml"))
+    registered = {
+        str(entry.get("term", "")).strip().casefold()
+        for entry in load_glossary(glossary_path)
+        if isinstance(entry, dict) and isinstance(entry.get("term"), str)
+    }
+    selected_paths = {value.replace("\\", "/") for value in (args.path or [])}
+    candidates: list[dict[str, str]] = []
+    for record in records:
+        if selected_paths and record["path"] not in selected_paths:
+            continue
+        terms = record["metadata"].get("glossary_terms", [])
+        if not isinstance(terms, list):
+            continue
+        for term in terms:
+            if not isinstance(term, str) or not term.strip() or term.strip().casefold() in registered:
+                continue
+            candidates.append({"term": term.strip(), "path": record["path"]})
+    if not candidates:
+        print("NO UNREGISTERED GLOSSARY TERMS")
+        return 0
+    for candidate in sorted(candidates, key=lambda item: (item["term"].casefold(), item["path"])):
+        if args.json:
+            print(json.dumps(candidate, ensure_ascii=False, separators=(",", ":")))
+        else:
+            print(f"{candidate['term']}\t{candidate['path']}")
+    return 0
+
+
+def query_preferences(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve()
+    config = repository_config(root)
+    records = allowed_records(load_records(root, config), config, identity_subjects(args), False)
+    preference_kinds = {"preference", "conditional-action", "constraint"}
+    selected: list[dict[str, Any]] = []
+    for record in records:
+        metadata = record["metadata"]
+        memory = metadata.get("memory") if isinstance(metadata.get("memory"), dict) else {}
+        if memory.get("subject") != args.principal:
+            continue
+        if metadata.get("type") == "persona" and memory.get("level") == "l3":
+            selected.append(record)
+        elif (
+            metadata.get("type") == "memory"
+            and memory.get("level") == "l1"
+            and memory.get("kind") in preference_kinds
+        ):
+            selected.append(record)
+    selected.sort(key=lambda item: (item["metadata"].get("type") != "persona", item["path"]))
+    print_records(selected, args.json)
+    return 0
+
+
+def distilled_parent_ids(metadata: dict[str, Any]) -> list[str]:
+    relations = metadata.get("relations", [])
+    if not isinstance(relations, list):
+        return []
+    return [
+        str(relation["target"])
+        for relation in relations
+        if isinstance(relation, dict)
+        and relation.get("type") == "distilled_from"
+        and isinstance(relation.get("target"), str)
+    ]
+
+
+def provenance_keys(record: dict[str, Any], by_id: dict[str, dict[str, Any]]) -> set[str]:
+    seen: set[str] = set()
+
+    def visit(current: dict[str, Any]) -> set[str]:
+        metadata = current["metadata"]
+        doc_id = str(metadata.get("id", ""))
+        if doc_id in seen:
+            return set()
+        seen.add(doc_id)
+        parents = [by_id[parent] for parent in distilled_parent_ids(metadata) if parent in by_id]
+        if parents:
+            roots: set[str] = set()
+            for parent in parents:
+                roots.update(visit(parent))
+            if roots:
+                return roots
+        provenance = metadata.get("provenance", [])
+        if isinstance(provenance, list):
+            sources = {source_reference(item) for item in provenance}
+            keys = {f"provenance:{source}" for source in sources if source}
+            if keys:
+                return keys
+        return {f"document:{doc_id}"} if doc_id else set()
+
+    return visit(record)
+
+
 def l3_candidates(
     records: list[dict[str, Any]], minimum_sources: int, subject: str | None = None
-) -> dict[str, list[str]]:
-    grouped: dict[str, set[str]] = {}
+) -> dict[str, dict[str, list[str]]]:
+    by_id = {
+        str(record["metadata"].get("id")): record
+        for record in records
+        if isinstance(record["metadata"].get("id"), str)
+    }
+    grouped: dict[str, dict[str, set[str]]] = {}
     covered: dict[str, set[str]] = {}
     for record in records:
         metadata = record["metadata"]
@@ -496,7 +598,10 @@ def l3_candidates(
             and isinstance(doc_id, str)
             and (subject is None or memory_subject == subject)
         ):
-            grouped.setdefault(memory_subject, set()).add(doc_id)
+            group = grouped.setdefault(memory_subject, {"documents": set(), "provenance": set()})
+            group["documents"].add(doc_id)
+            group["provenance"].update(provenance_keys(record, by_id))
+
         if (
             metadata.get("type") != "persona"
             or metadata.get("status") != "active"
@@ -505,21 +610,20 @@ def l3_candidates(
             or (subject is not None and memory_subject != subject)
         ):
             continue
-        relations = metadata.get("relations")
-        if not isinstance(relations, list):
-            continue
-        for relation in relations:
-            if (
-                isinstance(relation, dict)
-                and relation.get("type") == "distilled_from"
-                and isinstance(relation.get("target"), str)
-            ):
-                covered.setdefault(memory_subject, set()).add(str(relation["target"]))
+        for target in distilled_parent_ids(metadata):
+            if target in by_id:
+                covered.setdefault(memory_subject, set()).update(
+                    provenance_keys(by_id[target], by_id)
+                )
+
     return {
-        memory_subject: sorted(doc_ids)
-        for memory_subject, doc_ids in sorted(grouped.items())
-        if len(doc_ids) >= minimum_sources
-        and not doc_ids.issubset(covered.get(memory_subject, set()))
+        memory_subject: {
+            "evidence_ids": sorted(group["documents"]),
+            "provenance": sorted(group["provenance"]),
+        }
+        for memory_subject, group in sorted(grouped.items())
+        if len(group["provenance"]) >= minimum_sources
+        and not group["provenance"].issubset(covered.get(memory_subject, set()))
     }
 
 
@@ -536,18 +640,19 @@ def query_l3_candidates(args: argparse.Namespace) -> int:
     if not candidates:
         print("NO ELIGIBLE L3 CANDIDATES")
         return 0
-    for memory_subject, evidence_ids in candidates.items():
+    for memory_subject, evidence in candidates.items():
         item = {
             "subject": memory_subject,
             "minimum_sources": minimum,
-            "evidence_ids": evidence_ids,
+            **evidence,
         }
         if args.json:
             print(json.dumps(item, ensure_ascii=False, separators=(",", ":")))
         else:
             print(
                 f"{memory_subject}\tminimum_sources={minimum}\t"
-                f"evidence={','.join(evidence_ids)}"
+                f"evidence={','.join(evidence['evidence_ids'])}\t"
+                f"provenance={','.join(evidence['provenance'])}"
             )
     return 0
 
@@ -655,6 +760,21 @@ def manage_reindex(args: argparse.Namespace) -> int:
     return 0
 
 
+def manage_memory_finalize(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve()
+    config = repository_config(root)
+    require_repository_manager(root, config, args)
+    print("MEMORY FINALIZE validate -> rebuild derived indexes")
+    if not args.apply:
+        print("DRY-RUN: pass --apply only after the user authorizes memory storage")
+        return 0
+    validation_args = argparse.Namespace(repository=str(root), strict_warnings=False)
+    validation_result = manage_validate(validation_args)
+    if validation_result:
+        return validation_result
+    return manage_reindex(args)
+
+
 def manage_migrate(args: argparse.Namespace) -> int:
     root = Path(args.repository).resolve()
     config_path = root / ".knowledge" / "config.yml"
@@ -715,6 +835,7 @@ def manage_migrate(args: argparse.Namespace) -> int:
     skill_source = Path(__file__).resolve().parents[1]
     skill_target = root / ".agents" / "skills" / "lmwiki"
     skill_updates: list[tuple[Path, Path]] = []
+    global_skill_updates: list[tuple[Path, Path]] = []
     if args.sync_skill_copy:
         for source in sorted(skill_source.rglob("*")):
             if not source.is_file() or "__pycache__" in source.parts or source.suffix == ".pyc":
@@ -723,6 +844,24 @@ def manage_migrate(args: argparse.Namespace) -> int:
             target = skill_target / relative
             if not target.exists() or source.read_bytes() != target.read_bytes():
                 skill_updates.append((source, target))
+    if args.sync_global_skill_copy:
+        global_target = (
+            Path(args.global_skill_target).expanduser().resolve()
+            if args.global_skill_target
+            else (Path.home() / ".agents" / "skills" / "lmwiki").resolve()
+        )
+        if not (
+            global_target.name == "lmwiki"
+            and global_target.parent.name == "skills"
+            and global_target.parent.parent.name == ".agents"
+        ):
+            raise ValueError("global skill target must end with .agents/skills/lmwiki")
+        for source in sorted(skill_source.rglob("*")):
+            if not source.is_file() or "__pycache__" in source.parts or source.suffix == ".pyc":
+                continue
+            target = global_target / source.relative_to(skill_source)
+            if not target.exists() or source.read_bytes() != target.read_bytes():
+                global_skill_updates.append((source, target))
     print(f"CONFIG VERSION {raw_version} -> {CURRENT_CONFIG_VERSION}")
     print(f"CONFIG KEYS TO ADD {len(added)}")
     for key in added:
@@ -736,6 +875,9 @@ def manage_migrate(args: argparse.Namespace) -> int:
     print(f"SKILL FILES TO UPDATE {len(skill_updates)}")
     for _, path in skill_updates:
         print(f"  ~ {relative_posix(path, root)}")
+    print(f"GLOBAL SKILL FILES TO UPDATE {len(global_skill_updates)}")
+    for _, path in global_skill_updates:
+        print(f"  ~ {path}")
     if args.sync_skill_copy and (root / "skills-lock.json").exists():
         print("NOTE skills-lock.json is not modified; refresh it with the original skill installer")
     if not args.apply:
@@ -747,6 +889,9 @@ def manage_migrate(args: argparse.Namespace) -> int:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(support_files[path], encoding="utf-8", newline="\n")
     for source, target in skill_updates:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+    for source, target in global_skill_updates:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, target)
     with config_path.open("w", encoding="utf-8", newline="\n") as handle:
@@ -805,6 +950,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_identity_arguments(glossary)
     glossary.set_defaults(handler=query_glossary)
 
+    glossary_candidates_query = queries.add_parser("glossary-candidates")
+    glossary_candidates_query.add_argument("repository")
+    glossary_candidates_query.add_argument("--path", action="append")
+    glossary_candidates_query.add_argument("--json", action="store_true")
+    add_identity_arguments(glossary_candidates_query)
+    glossary_candidates_query.set_defaults(handler=query_glossary_candidates)
+
+    preferences_query = queries.add_parser("preferences")
+    preferences_query.add_argument("repository")
+    preferences_query.add_argument("--json", action="store_true")
+    add_identity_arguments(preferences_query)
+    preferences_query.set_defaults(handler=query_preferences)
+
     l3_query = queries.add_parser("l3-candidates")
     l3_query.add_argument("repository")
     l3_query.add_argument("--subject")
@@ -832,6 +990,12 @@ def build_parser() -> argparse.ArgumentParser:
     add_identity_arguments(reindex)
     reindex.set_defaults(handler=manage_reindex)
 
+    memory_finalize = managers.add_parser("memory-finalize")
+    memory_finalize.add_argument("repository")
+    memory_finalize.add_argument("--apply", action="store_true")
+    add_identity_arguments(memory_finalize)
+    memory_finalize.set_defaults(handler=manage_memory_finalize)
+
     migrate = managers.add_parser("migrate")
     migrate.add_argument("repository")
     migrate.add_argument("--apply", action="store_true")
@@ -839,6 +1003,15 @@ def build_parser() -> argparse.ArgumentParser:
         "--sync-skill-copy",
         action="store_true",
         help="sync this CLI's lmwiki skill into repository .agents/skills/lmwiki",
+    )
+    migrate.add_argument(
+        "--sync-global-skill-copy",
+        action="store_true",
+        help="sync this CLI's lmwiki skill into ~/.agents/skills/lmwiki",
+    )
+    migrate.add_argument(
+        "--global-skill-target",
+        help="override the global target; it must end with .agents/skills/lmwiki",
     )
     add_identity_arguments(migrate)
     migrate.set_defaults(handler=manage_migrate)
