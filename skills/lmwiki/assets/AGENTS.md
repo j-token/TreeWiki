@@ -40,7 +40,7 @@ embedding:
 
 - L0–L3 개인 기억과 Persona는 기본적으로 `.knowledge/private-memory/`에 둔다.
 - 팀 공유가 확인된 L2 기억만 `docs/memory/l2/`에 둔다.
-- L0–L2는 Codex Stop 훅이 순서대로 발화한다. L3는 같은 subject의 활성 L1/L2 근거가 두 개 이상일 때만 프로그램이 발화를 연다.
+- LMWiki 스킬은 작업 완료 후보를 판단한 뒤 사용자에게 기억 저장 여부를 묻고, 사용자가 다음 메시지에서 확인한 경우에만 L0–L2를 순서대로 처리한다. Stop 훅은 기억 저장 트리거로 사용하지 않는다. L3는 `query l3-candidates`가 같은 subject의 활성 L1/L2 근거를 두 개 이상 반환할 때만 독립성을 검토한다.
 - 완료·commit·push·pull request 같은 인수인계 경계 신호가 보이면 AI가 같은 작업 단위에서 runbook 생성 여부를 한 번 묻는다. 사용자가 `만들기`를 선택한 뒤에만 `draft`를 만든다.
 - 조회 시 호출자의 `user:*`, `team:*`, `role:*`, `agent:*` 주체를 확인하고 ACL 필터를 먼저 적용한다.
 - 저장소 고유 명칭은 `docs/vocabulary/glossary.yml`에서 확인하고 `query glossary`로 조회한다.
