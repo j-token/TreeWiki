@@ -1,0 +1,115 @@
+format: 1
+product: treewiki
+display_name: TreeWiki
+release: 0.1.0
+repository: j-token/treewiki
+source_ref: v0.1.0
+config_schema:
+  minimum: 1
+  current: 3
+  maximum: 3
+compatibility:
+  legacy_skill: lmwiki
+  mode: warning-shim
+  introduced_in: 0.1.0
+  remove_in: 0.2.0
+distribution:
+  installer: skills-cli
+  repository: j-token/treewiki
+  canonical_skill: treewiki
+  install_command: npx skills add j-token/treewiki --skill treewiki -g -a codex -y
+    --copy
+artifacts:
+  files:
+  - path: SKILL.md
+    sha256: 58d5c3550d11983adf070f7720202703b8d7e0cc6ee906fe2541e1a11638fff1
+  - path: agents/openai.yaml
+    sha256: 708bc5ec20557af2955a1c7a906dcd035e03de4da190aa5c9ab7b87f55b91fa9
+  - path: assets/AGENTS.md
+    sha256: ea93a99901ef4e16397162124e7d09a5d9bb5c7a75e836acdc5d6df0a221a53b
+  - path: assets/config.yml
+    sha256: 413e250668337f1e623c9c6b612326c0fdac0018d63b616aca0d0ae132e244d0
+  - path: assets/contract.md
+    sha256: bbb39b4ed63198b3b8886dcb30af8f1c7312af9f3d3757b2497f238afed825ec
+  - path: assets/decision.md
+    sha256: 4d2f286b3f0b858c1d90cc13f213701275df2878426bbafad49297f99bc7fe12
+  - path: assets/glossary.yml
+    sha256: 8f04aee791bffeddbc20b3c895628ddae2dd611c65e122dfc35856d11431207e
+  - path: assets/hook-state.gitignore
+    sha256: 240a3e0d37d2e86b614063f5347eb02d4f99ca6c254de6b82871ff8d95532a7d
+  - path: assets/index.gitignore
+    sha256: 240a3e0d37d2e86b614063f5347eb02d4f99ca6c254de6b82871ff8d95532a7d
+  - path: assets/knowledge.gitignore
+    sha256: 23254dc286193d1e7c8de402ee04f8e8ca11bbe9245954c6af71cb0e33e14b5b
+  - path: assets/memory-l0.md
+    sha256: 6ddb9128f24334fb018cb2043544fd8ef79f5134ee01749c1e23add822e2955d
+  - path: assets/memory-l1.md
+    sha256: e5781f8f7b8f1f1a00aebfecb0056e0d6f91d24a5f9cf7b628eb826be36791ac
+  - path: assets/memory-l2.md
+    sha256: 0f7271d26474396cf40ef149de49108f836a1ee612d992d1957effdc3cf000f4
+  - path: assets/persona.md
+    sha256: f63f2944f06a99f1707cc0537eff9befc83c906bd460d20b068630a547b2dfbb
+  - path: assets/principals.yml
+    sha256: 0f65417b717203cfe703b62ad2eb2f3485519fe72f15064dced9fac17e49255f
+  - path: assets/private-memory.gitignore
+    sha256: 0cd4bd093783f1609ab44ff5bde14c6f9ddcd1bff467f78f83e4d1d3f923a13b
+  - path: assets/purpose.md
+    sha256: 34954a4a6d48c6c15a64a862caccd5992b5915f77404b7e1f64f8228a126a4db
+  - path: assets/runbook.md
+    sha256: 49d0b0f980be83d96bb21d3e1fcf0a039cac5dec1b5f953326d9b4e651c83dab
+  - path: assets/schema.md
+    sha256: e8f75cdc2d4c72d5260bd9c7df7fd3e87b2986c99e0c0b053f53462fa1199f77
+  - path: assets/skill-backups.gitignore
+    sha256: 1d6b35c2897689826e66f70179c914099db12823ed6ebc19d9f1d12be5a14f93
+  - path: assets/topics.yml
+    sha256: 38e097bd38eebf0702066421278b8a7fdfdf7c08862f3f0ee3959efcd957da54
+  - path: references/access-control.md
+    sha256: 3b1bc4bbefcdc48af1532ab8a1f94723cad0fb20faa1b123d536c4309f4c9870
+  - path: references/adoption-workflow.md
+    sha256: ca14007f25e52847095d76fbf1e112de8972a7ad700bcd31b44b2d46e836ec0b
+  - path: references/agent-research.md
+    sha256: efe885d79ff811f7868dfc5129b2e4561062641f8f04b48b0bf62c73ee22e174
+  - path: references/agents-map.md
+    sha256: 06f87cfa1db66e03e641efd47aeb2499278ce765770ac28a2f93c325f6037e1d
+  - path: references/change-and-audit.md
+    sha256: f83dbe4aca0534acce2c195e2ef12339f62cc4f558879cd15cb4c9148e126a75
+  - path: references/command-boundaries.md
+    sha256: 74b243d381e8954ac45f9a5b63641e4a4a8965ee8d716cc39cdf9937f4404aaf
+  - path: references/embedding-retrieval.md
+    sha256: ff01ecde7a6eac789d2155398ff4fdbe4f0b70039ff5ce02679c5ff0d8395cb7
+  - path: references/glossary.md
+    sha256: 807f74f820d911a623df08e0d820dd0e47ccd01884abb81c869d403ca115e3b4
+  - path: references/hook-lifecycle.md
+    sha256: 7ade9e02b6d2e7bd5e65c711b28b1c04df4ede0ba169ea748d457a1e7947fa18
+  - path: references/lifecycle-and-relations.md
+    sha256: 2716bb548908645eb17ae5dbef416a5e54f711250466a8beca1c28063decdb73
+  - path: references/memory-and-persona.md
+    sha256: 22fca6eaed07114ffb6aa2b72bb54e239bc8aaf70b8426e81b56dfd924e1db5f
+  - path: references/metadata-schema.md
+    sha256: 427b55423d4d871df31b2f36eda95d280c87146c45e2d6351e16c597b7c1b1cb
+  - path: references/upgrade-guide.md
+    sha256: 1a2730fd3d93f10b47a7a6215aa4cc205025ae345c967f2fe26978be707b2a55
+  - path: scripts/bootstrap_treewiki.py
+    sha256: 6bb9a31ca18f644d0177674f9bb0d2da1238666f30f9a3172446c221f8054d5f
+  - path: scripts/build_embedding_index.py
+    sha256: bf1c00122b8d51c04755e8769fca7f93600f949397c103f03f5018c2c06f671b
+  - path: scripts/build_release_manifest.py
+    sha256: ca6a12bb3b48d01764028a7f3ae70b4a9dcd4e58fbe2f8d3273285c2104e5aee
+  - path: scripts/build_search_index.py
+    sha256: 75e08481995c39047868626ef56257fdd0b85036347421445ae3a4b9fe157e20
+  - path: scripts/install_treewiki_hooks.py
+    sha256: 80e6f62b02e2f4843b96e4ba7f2b67a7d8536afa241b833e57b9cdf217c5919b
+  - path: scripts/knowledge_cli.py
+    sha256: 43f59bef48442ee5f0c8d577173e4761b5e58e14cae5577a67a15703ebde2120
+  - path: scripts/memory_policy.py
+    sha256: b7bc8935fb0b59641ae996b9b1ebd9d5bdca3f93217fe80f17f2d4710adbb715
+  - path: scripts/release_manifest.py
+    sha256: 9a7fbbea46b1ea013ff0267d2059d9b83d599d8443af8be7039c1c076c2d83c9
+  - path: scripts/requirements.txt
+    sha256: b4603b9468ade4d639d2c6f73b89d50e1fa5d227c73ab15be0382cca478513e6
+  - path: scripts/treewiki_hook.py
+    sha256: 3c29d3e99cfb30f9ee4fd8a605775d902d57c3faadc9eafaf9acada4a6ec43ff
+  - path: scripts/upgrade.py
+    sha256: 369ef210ae00976232d16f3f392ba55df5488e6c9d74239ae20795dd57b76585
+  - path: scripts/validate_knowledge.py
+    sha256: 5d0da320c436ca1956c74ad0b16e8022b4fa6c9b43898a27aa02d0f9130c6d41

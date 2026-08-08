@@ -1,134 +1,56 @@
 #!/usr/bin/env python
-"""Create a non-destructive LMWiki repository skeleton."""
+"""Deprecated LMWiki entry point forwarding to TreeWiki bootstrap."""
 
 from __future__ import annotations
 
-import argparse
+import hashlib
+import runpy
 import sys
-from datetime import date
 from pathlib import Path
 
-try:
-    import yaml
-except ModuleNotFoundError:
-    print("ERROR PyYAML is required; install scripts/requirements.txt", file=sys.stderr)
-    raise SystemExit(2)
+import yaml
 
 
-DIRECTORIES = [
-    "docs/contracts",
-    "docs/decisions",
-    "docs/runbooks",
-    "docs/concepts",
-    "docs/references",
-    "docs/vocabulary",
-    "docs/memory/l2",
-    ".knowledge",
-    ".knowledge/index",
-    ".knowledge/hooks",
-    ".knowledge/hooks/state",
-    ".knowledge/private-memory/l0",
-    ".knowledge/private-memory/l1",
-    ".knowledge/private-memory/l2",
-    ".knowledge/private-memory/l3",
-]
+TARGET = "scripts/bootstrap_treewiki.py"
+INSTALL_COMMAND = "npx skills add j-token/treewiki --skill treewiki -g -a codex -y --copy"
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("repository", nargs="?", default=".")
-    parser.add_argument("--embedding", choices=["disabled", "local", "remote"], required=True)
-    parser.add_argument("--remote-content-allowed", action="store_true")
-    parser.add_argument("--owner", default="user:owner")
-    parser.add_argument("--team", default="team:repository")
-    parser.add_argument("--dry-run", action="store_true")
-    args = parser.parse_args()
+def canonical_target() -> Path:
+    skill_root = Path(__file__).resolve().parents[2] / "treewiki"
+    manifest_path = skill_root / "treewiki-release.yml"
+    target = skill_root / TARGET
+    if not manifest_path.is_file() or not target.is_file():
+        raise FileNotFoundError(f"canonical TreeWiki is missing; install it with: {INSTALL_COMMAND}")
+    manifest = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
+    files = manifest.get("artifacts", {}).get("files", []) if isinstance(manifest, dict) else []
+    expected = next(
+        (item.get("sha256") for item in files if isinstance(item, dict) and item.get("path") == TARGET),
+        None,
+    )
+    actual = hashlib.sha256(target.read_bytes()).hexdigest()
+    if expected != actual:
+        raise ValueError("canonical TreeWiki bootstrap does not match its embedded manifest")
+    return target
 
-    if args.embedding == "remote" and not args.remote_content_allowed:
-        print("ERROR remote embedding requires --remote-content-allowed")
-        return 1
 
-    root = Path(args.repository).resolve()
-    skill_root = Path(__file__).resolve().parents[1]
-    assets = skill_root / "assets"
-    if not root.exists() or not root.is_dir():
-        print(f"ERROR repository directory not found: {root}")
-        return 1
-
-    created: list[str] = []
-    skipped: list[str] = []
-
-    for relative in DIRECTORIES:
-        target = root / relative
-        if target.exists():
-            continue
-        if not args.dry_run:
-            target.mkdir(parents=True, exist_ok=True)
-        created.append(relative + "/")
-
-    text_files = {
-        "AGENTS.md": assets / "AGENTS.md",
-        "docs/vocabulary/topics.yml": assets / "topics.yml",
-        "docs/vocabulary/glossary.yml": assets / "glossary.yml",
-        ".knowledge/purpose.md": assets / "purpose.md",
-        ".knowledge/schema.md": assets / "schema.md",
-        ".knowledge/private-memory/.gitignore": assets / "private-memory.gitignore",
-        ".knowledge/index/.gitignore": assets / "index.gitignore",
-        ".knowledge/hooks/state/.gitignore": assets / "hook-state.gitignore",
-    }
-    for relative, source in text_files.items():
-        target = root / relative
-        if target.exists():
-            skipped.append(relative)
-            continue
-        content = source.read_text(encoding="utf-8").replace("YYYY-MM-DD", date.today().isoformat())
-        if not args.dry_run:
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8", newline="\n")
-        created.append(relative)
-
-    config_target = root / ".knowledge" / "config.yml"
-    if config_target.exists():
-        skipped.append(".knowledge/config.yml")
-    else:
-        with (assets / "config.yml").open("r", encoding="utf-8") as handle:
-            config = yaml.safe_load(handle)
-        embedding = config["embedding"]
-        embedding["enabled"] = args.embedding != "disabled"
-        embedding["execution"] = "none" if args.embedding == "disabled" else args.embedding
-        embedding["remote_content_allowed"] = bool(args.remote_content_allowed)
-        config["retrieval"]["bm25_enabled"] = args.embedding != "disabled"
-        config["access_control"]["default_owner"] = args.owner
-        config["access_control"]["default_team"] = args.team
-        config["access_control"]["managers"] = [args.owner]
-        if not args.dry_run:
-            config_target.parent.mkdir(parents=True, exist_ok=True)
-            with config_target.open("w", encoding="utf-8", newline="\n") as handle:
-                yaml.safe_dump(config, handle, allow_unicode=True, sort_keys=False)
-        created.append(".knowledge/config.yml")
-
-    principals_target = root / ".knowledge" / "principals.yml"
-    if principals_target.exists():
-        skipped.append(".knowledge/principals.yml")
-    else:
-        with (assets / "principals.yml").open("r", encoding="utf-8") as handle:
-            principals = yaml.safe_load(handle)
-        principals["team"] = args.team
-        principals["users"] = [args.owner]
-        if not args.dry_run:
-            with principals_target.open("w", encoding="utf-8", newline="\n") as handle:
-                yaml.safe_dump(principals, handle, allow_unicode=True, sort_keys=False)
-        created.append(".knowledge/principals.yml")
-
-    mode = "DRY-RUN" if args.dry_run else "CREATED"
-    print(f"{mode} {len(created)} paths")
-    for path in created:
-        print(f"  + {path}")
-    print(f"SKIPPED {len(skipped)} existing files")
-    for path in skipped:
-        print(f"  = {path}")
-    return 0
+def main() -> None:
+    print(
+        "WARNING $lmwiki/bootstrap_lmwiki.py is deprecated; use "
+        "$treewiki/bootstrap_treewiki.py. This shim is removed in 0.2.0.",
+        file=sys.stderr,
+    )
+    try:
+        target = canonical_target()
+    except FileNotFoundError as exc:
+        print(f"ERROR LEGACY_TARGET_MISSING: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    except (OSError, UnicodeError, ValueError, yaml.YAMLError) as exc:
+        print(f"ERROR LEGACY_TARGET_INVALID: {exc}", file=sys.stderr)
+        raise SystemExit(2) from exc
+    sys.path.insert(0, str(target.parent))
+    sys.argv[0] = str(target)
+    runpy.run_path(str(target), run_name="__main__")
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

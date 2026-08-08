@@ -11,7 +11,7 @@ import yaml
 
 
 ROOT = Path(__file__).resolve().parents[1]
-SCRIPTS = ROOT / "skills" / "lmwiki" / "scripts"
+SCRIPTS = ROOT / "skills" / "treewiki" / "scripts"
 
 
 class GlossaryTests(unittest.TestCase):
@@ -19,7 +19,7 @@ class GlossaryTests(unittest.TestCase):
         result = subprocess.run(
             [
                 sys.executable,
-                str(SCRIPTS / "bootstrap_lmwiki.py"),
+                str(SCRIPTS / "bootstrap_treewiki.py"),
                 str(repository),
                 "--embedding",
                 "disabled",

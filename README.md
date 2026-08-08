@@ -1,225 +1,68 @@
-# LMWiki
+# TreeWiki
 
-[English](README.md) | [한국어](README.ko.md)
+TreeWiki keeps repository maps, contracts, decisions, runbooks, and governed memory usable by people and coding agents. It is distributed as one Agent Skill: `$treewiki`.
 
-AI coding agents can add code faster than a team can keep documentation current. LMWiki keeps repository maps, contracts, decisions, runbooks, layered memory, personas, and validation links connected to the code.
+## Release and compatibility
 
-LMWiki is distributed as one Agent Skill. `$lmwiki` selects a bootstrap, adoption, change, audit, memory, or reindex mode from the repository state and the request. Detailed rules are loaded only when that mode needs them.
+The first TreeWiki release is **0.1.0**. It introduces the TreeWiki name, read-only upgrade diagnosis, explicit memory sharing boundaries, and the upgrade guide. The legacy `LMWiki` name is a compatibility-only alias for existing installs during 0.1.x; its shim is removed in **0.2.0**. Historical IDs and provenance containing that name are never rewritten.
 
-During the first LMWiki setup, the skill asks once whether to enable embeddings and the local SQLite BM25 location index. It stores the answer in `.knowledge/config.yml`; later runs reuse it without asking again.
-
-## What it manages
-
-- `AGENTS.md` files point agents to code areas, active contracts, and validation commands.
-- Markdown frontmatter stores stable IDs, document types, status, topics, scope, and typed relationships.
-- Controlled vocabulary maps aliases such as `auth` and `login` to one topic key.
-- The glossary maps repository-specific terms to descriptions so people and AI agents name the same thing consistently.
-- Validation catches duplicate IDs, broken links, invalid lifecycle dependencies, and active contracts without evidence.
-- Stop hooks emit L0 raw capture, L1 facts, and L2 work scenes in order.
-- L3 is emitted only after code checks the evidence threshold for a durable persona.
-- At completion, commit, push, or pull-request boundaries, the agent asks once per work unit whether to create a runbook and drafts one only after the user opts in.
-- User, team, role, and agent policies filter retrieval before ranking.
-- Read-only `query` commands are separate from mutation-capable `manage` commands.
-- When embeddings are enabled, a local SQLite FTS5/BM25 index finds a broad set of related document locations without replacing the Markdown source.
-
-## Install
-
-Install the skill with the open [Skills CLI](https://github.com/vercel-labs/skills):
-
-```powershell
-npx skills add j-token/lmwiki --skill lmwiki
-```
-
-Install the global Codex hook once from the installed skill or this checkout:
+Before a mutating operation, run the read-only status check and follow its guide:
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki/scripts/install_global_hooks.py --fallback-repository C:\path\to\central-wiki
+python skills/treewiki/scripts/knowledge_cli.py manage upgrade-status <repository-root> --principal user:<id> --team team:<id> --offline
 ```
 
-For a global Codex installation:
+Status compares config schema, skill release and manifest/hash, vendored/global copies, hook registration, migration needs, indexes, and compatibility shims separately. It reports unknown remote release state rather than guessing. `--apply` is always separate, requires user approval, and does not delete legacy files automatically.
+
+## Install and use
 
 ```powershell
-npx skills add j-token/lmwiki --skill lmwiki -g -a codex -y --copy
+npx skills add j-token/treewiki --skill treewiki
 ```
 
-## Use
-
-Use the skill for initial setup:
+Use `$treewiki` for a repository task. It loads the applicable maps and contracts, reads relevant source documents after ACL-filtered search, and validates changes. For independent research streams such as naming impact, contract discovery, or validation, it may delegate bounded work to subagents; the root agent verifies ACL, evidence, and results.
 
 ```text
-Use $lmwiki to initialize this repository and migrate its existing documentation.
+Use $treewiki to adopt this repository and preserve its existing documentation.
+Use $treewiki to update this authentication flow and its related contracts.
 ```
 
-Use the same skill for an existing repository change:
+## Memory and sharing
 
-```text
-Use $lmwiki to update this authentication flow and keep its contracts and runbooks current.
-```
+| Level | Purpose | Location | Git policy |
+| --- | --- | --- | --- |
+| L0 | Raw conversation and tool evidence | `.knowledge/private-memory/l0/` | local and ignored |
+| L1 | Atomic fact, preference, constraint, or event | `docs/memory/l1/` after approval | shared and tracked |
+| L2 | Reusable project or work context | `docs/memory/l2/` after approval | shared and tracked |
+| L3 | Durable team rule or Persona | `docs/memory/l3/` after approval | shared and tracked |
 
-The root `SKILL.md` contains mode selection and shared safety boundaries. Adoption, access control, metadata, memory, lifecycle, and embedding details stay in direct references and are loaded only when relevant.
+Capture is explicit. A Stop hook never stores memory. When work is genuinely complete, the agent asks whether to save it; only a separate, short confirmation begins L0 capture and proposed L1–L3 processing. Shared documents must carry author, approver, opaque source reference/hash, source-machine identifier, and status. Git tracking never means automatic stage, commit, or push.
+
+TreeWiki actively proposes an L3 candidate once two or more independent top-level provenance sources and work units support the same `(subject, scope, claim_key, claim_value)`. It reports missing evidence when only one exists, never merges unrelated or conflicting claims, and creates L3 as `proposed`; an explicit user or team-manager approval is required for `active`.
 
 ## Document model
 
-LMWiki uses eight document types.
+TreeWiki uses typed Markdown with stable IDs: `map`, `contract`, `decision`, `runbook`, `concept`, `reference`, `memory`, and `persona`. `AGENTS.md` maps an area to its contracts and validation entry points. Markdown/frontmatter remains authoritative; indexes are recreatable derivatives.
 
-| Type | Purpose |
-| --- | --- |
-| `map` | Connect code areas to documents and validation entry points |
-| `contract` | Record behavior and constraints the system must preserve |
-| `decision` | Record a choice, its reason, and replacement history |
-| `runbook` | Record operational and recovery procedures |
-| `concept` | Explain repository-specific terms and mechanisms |
-| `reference` | Hold generated or external reference material |
-| `memory` | Store L0–L2 conversation and working memory |
-| `persona` | Store L3 durable collaboration preferences backed by multiple sources |
-
-Each managed Markdown file starts with YAML frontmatter:
-
-```yaml
----
-id: CONTRACT-AUTH-001
-title: Authentication token contract
-type: contract
-status: active
-authority: normative
-topics:
-  - authentication
-summary: Defines token issue, validation, and expiry behavior.
-applies_to:
-  - src/auth/**
-read_when:
-  - changing authentication code
-relations:
-  - type: verified_by
-    target: tests/auth/token.test.ts
-reviewed: 2026-08-03
-embedding:
-  mode: local_only
-  content: full
----
-```
-
-Memory documents also declare their level and access policy:
-
-```yaml
-memory:
-  level: l2
-  subject: project:repository
-  confidence: 0.8
-access:
-  visibility: team
-  owner: user:owner
-  team: team:repository
-  grants:
-    - subject: agent:lmwiki
-      permissions: [read]
-```
-
-## Repository layout
-
-The skill creates and maintains this layout in a target repository:
-
-```text
-AGENTS.md
-.knowledge/
-├── config.yml
-├── purpose.md
-├── schema.md
-├── principals.yml
-├── index/
-│   └── .gitignore
-├── hooks/
-│   └── state/
-│       └── .gitignore
-└── private-memory/
-    ├── l0/
-    ├── l1/
-    ├── l2/
-    └── l3/
-docs/
-├── contracts/
-├── decisions/
-├── runbooks/
-├── concepts/
-├── references/
-├── memory/
-│   └── l2/
-└── vocabulary/
-    ├── topics.yml
-    └── glossary.yml
-```
-
-The root map should reach each major code area within two map links. Local maps add regional details without copying the root rules.
-
-## Memory and access
-
-- L0 preserves raw conversation evidence.
-- L1 stores one fact, preference, constraint, or event.
-- L2 restores a project or task scenario.
-- L3 stores a persona only after at least two independent L1 or L2 sources support it.
-
-Memory capture defaults to `hook`. A Codex `Stop` hook emits L0→L1→L2 in order. Code emits the L3 review only after finding at least two active L1/L2 sources for the same subject. The final stage reviews completion, commit, push, and pull-request signals. When a signal exists, the agent asks once per work unit whether to keep a runbook and creates a `draft` only after the user opts in.
-
-Private and restricted memory stays under the Git-ignored `.knowledge/private-memory/` path. Frontmatter ACLs control cooperative agent retrieval; they do not prevent a person with repository access from reading tracked files.
-
-The installer writes the hook definition and runner once to global Codex paths `~/.codex/hooks.json` and `~/.codex/hooks/lmwiki_hook.py`. It uses the nearest repository with `.knowledge/config.yml`, or the central wiki selected during installation when the current task has no local LMWiki repository. Review and trust the global hook with `/hooks` in Codex before it can run. Set `hooks.execution` to `same_thread` or `agent`; agent mode requests delegation first and falls back to the current thread when the runtime cannot delegate.
-
-## Query and manage
+## Query, validation, and optional indexes
 
 ```powershell
 $env:PYTHONUTF8='1'
-python skills/lmwiki/scripts/knowledge_cli.py query search <repository-root> "authentication" --principal user:owner --team team:repository
-python skills/lmwiki/scripts/knowledge_cli.py query glossary <repository-root> "workspace" --principal user:owner --team team:repository
-python skills/lmwiki/scripts/knowledge_cli.py query graph <repository-root> --principal user:owner --team team:repository
+python skills/treewiki/scripts/knowledge_cli.py query search <repository-root> "authentication" --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py query preferences <repository-root> --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py query l3-candidates <repository-root> --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py manage validate <repository-root>
 ```
 
-`query search`, `read`, `list`, `graph`, and `glossary` never write files. `query glossary` lists all entries when the term is omitted, or matches against terms and descriptions when it is provided. `manage validate` is also read-only and checks missing terms, missing descriptions, and duplicate terms. `manage sync`, `reindex`, and `migrate` require a subject listed in `access_control.managers`; they also require `--apply` before mutating repository state.
+Initial setup asks once whether to enable local embeddings and SQLite BM25. No document is sent externally without explicit permission. GitHub latest-release checks are opt-in and default to offline/unknown.
 
-Search deliberately favors recall over a short, precise answer. With embeddings enabled it expands vocabulary aliases, prefixes, and Korean bigrams, retrieves up to 24 BM25 candidates, follows one relation hop, and returns up to 12 locations. Each result contains only `path`, `id`, `rank`, `via`, and `engine`; the LLM must use `query read` to inspect a selected document.
+## Upgrade guide
 
-## Optional embeddings
+1. Run `upgrade-status`; inspect every reported reason and the generated guide.
+2. Run the migration dry run. It lists config, skill copy, hook, and index actions independently.
+3. Approve only the required `--apply` action; make a backup or use Git first.
+4. Run `manage validate`, then regenerate approved derived indexes if requested.
+5. Remove a compatibility shim only after a TreeWiki install and regression checks succeed. Delete caches only when the guide classifies them as recreatable; remove worktrees with `git worktree remove`, never by deleting their directories.
 
-During initial setup, LMWiki waits for an explicit yes or no before creating the structure. A yes enables local embeddings and SQLite BM25 by default. A no disables both while retaining metadata, vocabulary, keyword, path, and relationship retrieval. The answer is stored in `.knowledge/config.yml`, so later invocations do not ask again.
-
-Remote document transfer defaults to disabled. Documents marked `local_only` stay local, and documents marked `deny` do not enter the chunk manifest. Markdown remains the source of truth; the vector index can be deleted and rebuilt.
-
-The included index scripts create provider-neutral JSONL chunks and a local SQLite FTS5/BM25 database. The database is enabled only with embeddings, is ignored by Git, and can be deleted and rebuilt. ACL-allowed document IDs are selected before BM25 ranking. Model selection and vector storage follow the repository's existing stack. LMWiki does not invent a model ID or switch remote providers after a failure.
-
-## Validate
-
-The scripts require Python and PyYAML. Use `python`, not `python3`.
-
-Create a new structure from this repository checkout:
-
-```powershell
-$env:PYTHONUTF8='1'
-python skills/lmwiki/scripts/bootstrap_lmwiki.py <repository-root> --embedding local
-```
-
-Use `--embedding disabled` when the initial answer is no.
-
-Validate an existing LMWiki repository:
-
-```powershell
-$env:PYTHONUTF8='1'
-python skills/lmwiki/scripts/validate_knowledge.py <repository-root>
-```
-
-Build the chunk manifest and SQLite search index when embeddings are enabled:
-
-```powershell
-$env:PYTHONUTF8='1'
-python skills/lmwiki/scripts/build_embedding_index.py <repository-root>
-python skills/lmwiki/scripts/build_search_index.py <repository-root>
-```
-
-## Current limits
-
-- The embedding builder produces chunks and hashes. Repository-specific code still connects those chunks to a model and vector store.
-- SQLite retrieval depends on Python's bundled SQLite having FTS5 support. It returns candidate locations, not snippets or generated answers.
-- The default review warning is 180 days. A date warning never archives a document automatically.
-- PyYAML is the only Python dependency.
-- Git-hosted ACL metadata cannot provide confidentiality to people who can read the repository; private storage or an authenticated external backend is required for enforcement.
-
-The metadata fields and retrieval thresholds are early defaults. They will change after more repositories expose where the rules are too strict or too loose.
+See [`skills/treewiki/SKILL.md`](skills/treewiki/SKILL.md) and its references for the normative workflow.

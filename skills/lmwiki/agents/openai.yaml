@@ -1,6 +1,8 @@
 interface:
-  display_name: "LMWiki"
-  short_description: "LMWiki 저장소에서 지식 규칙을 먼저 적용합니다"
-  default_prompt: "Use $lmwiki before repository work to load and apply the configured knowledge map and rules."
+  display_name: "LMWiki (deprecated)"
+  short_description: "TreeWiki 0.1 호환 shim — $treewiki로 전환하세요"
+  default_prompt: "Warn that $lmwiki is deprecated, then use the sibling $treewiki skill."
 policy:
-  allow_implicit_invocation: true
+  allow_implicit_invocation: false
+release:
+  compatibility_shim_removal: "0.2.0"
