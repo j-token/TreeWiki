@@ -1,5 +1,7 @@
 # TreeWiki
 
+[한국어](./README.ko.md)
+
 TreeWiki keeps repository maps, contracts, decisions, runbooks, and governed memory usable by people and coding agents. It is distributed as one Agent Skill: `$treewiki`.
 
 ## Release and compatibility
