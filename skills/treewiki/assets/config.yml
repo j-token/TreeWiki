@@ -1,0 +1,61 @@
+version: 3
+documents:
+  include:
+    - AGENTS.md
+    - "**/AGENTS.md"
+    - "docs/**/*.md"
+    - ".codex/prompts/supporting/**/*.md"
+    - ".knowledge/private-memory/l0/**/*.md"
+  exclude:
+    - "lmwiki/**/assets/AGENTS.md"
+    - "treewiki/**/assets/AGENTS.md"
+    - "skills/**/assets/AGENTS.md"
+vocabulary_path: docs/vocabulary/topics.yml
+glossary_path: docs/vocabulary/glossary.yml
+review_warning_days: 180
+memory:
+  enabled: true
+  capture: explicit
+  layout_version: 1
+  private_path: .knowledge/private-memory
+  shared_path: docs/memory
+  levels: [l0, l1, l2, l3]
+  persona_requires_sources: 2
+hooks:
+  enabled: false
+  execution: same_thread
+  memory_stages: [l0, l1, l2]
+  l3:
+    enabled: true
+    minimum_sources: 2
+  runbook:
+    enabled: true
+    require_user_confirmation: true
+    status: draft
+access_control:
+  default_visibility: team
+  default_owner: user:owner
+  default_team: team:repository
+  managers: [user:owner]
+  principal_required: true
+  policy_enforcement: cooperative
+retrieval:
+  keyword_enabled: true
+  graph_hops: 1
+  max_results: 6
+  bm25_enabled: true
+  bm25_index_path: .knowledge/index/search.db
+  bm25_candidate_limit: 24
+  bm25_result_limit: 12
+  bm25_query_mode: high_recall
+  result_content: locations_only
+embedding:
+  enabled: false
+  execution: none
+  remote_content_allowed: false
+  provider: null
+  model: null
+  index_path: .knowledge/index/
+  chunk_target_tokens: 800
+  chunk_max_tokens: 1000
+  chunk_overlap_tokens: 120

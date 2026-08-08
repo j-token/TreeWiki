@@ -1,0 +1,9 @@
+interface:
+  display_name: "TreeWiki"
+  short_description: "TreeWiki의 지식 지도와 승인 규칙을 저장소 작업 전에 적용합니다"
+  default_prompt: "Use $treewiki before repository work to retrieve and apply the configured TreeWiki maps and rules."
+policy:
+  allow_implicit_invocation: true
+release:
+  version: "0.1.0"
+  compatibility_shim_removal: "0.2.0"
