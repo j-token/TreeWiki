@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "treewiki": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${PLUGIN_ROOT}/dist/treewiki-mcp.mjs"],
+      "cwd": "${PLUGIN_ROOT}",
+      "env": { "PYTHONUTF8": "1" }
+    }
+  }
+}

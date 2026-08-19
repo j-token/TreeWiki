@@ -1,0 +1,5 @@
+.treewiki-plugin-data/
+node_modules/
+dist/src/
+dist/tests/
+*.tsbuildinfo

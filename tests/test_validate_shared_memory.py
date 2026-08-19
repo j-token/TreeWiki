@@ -33,7 +33,7 @@ class SharedMemoryValidationTests(unittest.TestCase):
         )
         (vocabulary / "glossary.yml").write_text("terms: []\n", encoding="utf-8")
         self.config = {
-            "version": 3,
+            "version": 4,
             "documents": {
                 "include": ["docs/**/*.md", ".knowledge/private-memory/l0/**/*.md"],
                 "exclude": [],
@@ -41,12 +41,17 @@ class SharedMemoryValidationTests(unittest.TestCase):
             "vocabulary_path": "docs/vocabulary/topics.yml",
             "glossary_path": "docs/vocabulary/glossary.yml",
             "memory": {
-                "layout_version": 1,
+                "layout_version": 2,
                 "capture": "explicit",
                 "private_path": ".knowledge/private-memory",
                 "shared_path": "docs/memory",
                 "persona_requires_sources": 2,
+                "l3": {
+                    "knowledge_path": "docs/memory/l3/knowledge",
+                    "persona_path": "docs/memory/l3/persona",
+                },
             },
+            "history": {"schema": 1, "sidecar": "stable-id"},
             "hooks": {"enabled": False, "l3": {"minimum_sources": 2}},
             "access_control": {
                 "default_owner": "user:owner",
@@ -94,7 +99,7 @@ class SharedMemoryValidationTests(unittest.TestCase):
                 "level": level,
                 "subject": "user:owner",
                 "kind": "preference",
-                "scope": "personal",
+                "scope": "user",
                 "claim_key": "workflow.example",
                 "claim_value": "preferred",
                 "confidence": 1.0,
@@ -182,7 +187,7 @@ class SharedMemoryValidationTests(unittest.TestCase):
         result = self.validate()
         self.assertIn("evidence_digest is stale", result.stdout)
 
-    def test_config_v3_rejects_private_l1_and_broad_private_glob(self) -> None:
+    def test_config_v4_rejects_private_l1_and_broad_private_glob(self) -> None:
         self.config["documents"]["include"].append(".knowledge/private-memory/**/*.md")
         self.write_config()
         metadata = self.metadata("MEMORY-L1-PRIVATE-001")
@@ -193,7 +198,7 @@ class SharedMemoryValidationTests(unittest.TestCase):
         )
         result = self.validate()
         self.assertIn("must not include private L1-L3", result.stdout)
-        self.assertIn("config v3 permits only L0", result.stdout)
+        self.assertIn("current config permits only L0", result.stdout)
 
 
 if __name__ == "__main__":

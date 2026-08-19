@@ -1,0 +1,33 @@
+{
+  "name": "@treewiki/agent-plugin",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Portable TreeWiki Agent Plugin with a Codex-compatible MCP Apps Workbench.",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build:widget": "node scripts/build-widget.mjs",
+    "build:server": "tsc -p tsconfig.json",
+    "bundle": "node scripts/build-bundle.mjs",
+    "build": "npm run build:widget && npm run build:server && npm run bundle",
+    "check": "npm run build && node --test dist/tests/*.test.js && node tests/bundle-smoke.mjs",
+    "dev:http": "npm run build:widget && tsx watch src/http.ts",
+    "start:http": "node dist/src/http.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "1.7.5",
+    "@modelcontextprotocol/sdk": "1.30.0",
+    "express": "5.2.1",
+    "yaml": "2.9.0",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.5",
+    "@types/node": "^24.10.0",
+    "esbuild": "0.27.0",
+    "tsx": "4.23.12",
+    "typescript": "7.0.2"
+  }
+}

@@ -1,0 +1,9 @@
+terms:
+  - term: 용어집
+    description: 팀과 AI가 같은 대상을 같은 명사로 지칭하도록 프로젝트 용어와 설명을 모은 YAML 원본.
+  - term: Persona
+    description: 서로 다른 작업 근거에서 반복 확인된 사용자의 장기 협업 선호와 안정적인 제약을 담는 L3 지식.
+  - term: 조건부 행동 규칙
+    description: 특정 조건이 충족될 때 AI가 수행해야 할 행동을 연결한 L1 협업 기억.
+  - term: 최상위 provenance
+    description: L1·L2 파생 계보를 거슬러 올라가 확인한 독립 작업 또는 원문 출처 식별자.

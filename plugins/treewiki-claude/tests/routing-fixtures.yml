@@ -1,0 +1,41 @@
+schema: treewiki.routing-fixtures/v1
+fixtures:
+  - id: adopt-missing-config
+    request: 이 저장소에 TreeWiki를 도입해줘
+    state: {config: missing}
+    expected_mode: adopt
+  - id: query-search
+    request: 인증 계약과 관련 문서를 찾아줘
+    state: {config: current}
+    expected_mode: query
+  - id: update-document
+    request: 결제 runbook을 지금 코드에 맞게 수정해줘
+    state: {config: current}
+    expected_mode: update
+  - id: remember-explicit
+    request: 이 결정을 L2로 기억해줘
+    state: {config: current}
+    expected_mode: remember
+  - id: review-notice
+    request: "NOTICE L3_CANDIDATE_CREATED id=MEMORY-L3-RULE-004"
+    state: {config: current, candidate_notice: true}
+    expected_mode: review
+  - id: upgrade-explicit
+    request: TreeWiki를 0.2.0으로 업그레이드해줘
+    state: {config: upgrade_required}
+    expected_mode: upgrade
+  - id: write-redirected-to-upgrade
+    request: 문서를 수정하고 이 규칙도 기억해줘
+    state: {config: upgrade_required}
+    expected_mode: upgrade
+    expected_blocking_state: upgrade_required
+  - id: read-during-upgrade
+    request: 업그레이드 전에 현재 계약만 읽어서 요약해줘
+    state: {config: upgrade_required}
+    expected_mode: query
+  - id: low-confidence
+    request: TreeWiki로 이거 처리해줘
+    state: {config: current}
+    expected_mode: query
+    expected_confidence: low
+    expected_behavior: read_only_then_ask
