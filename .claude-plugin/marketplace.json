@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
+  "name": "treewiki-marketplace",
+  "owner": {
+    "name": "j-token"
+  },
+  "metadata": {
+    "description": "TreeWiki plugins for governed repository knowledge and memory.",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "treewiki",
+      "source": "./plugins/treewiki-claude",
+      "description": "Route repository knowledge, governed memory, history, and upgrades through TreeWiki.",
+      "version": "0.2.0"
+    }
+  ]
+}

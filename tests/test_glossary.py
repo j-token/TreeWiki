@@ -31,6 +31,40 @@ class GlossaryTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def finalize(self, repository: Path, relative_path: str, document_id: str) -> None:
+        base = [
+            sys.executable,
+            str(SCRIPTS / "knowledge_cli.py"),
+            "manage",
+            "document-finalize",
+            str(repository),
+            "--path",
+            relative_path,
+            "--created-id",
+            document_id,
+            "--principal",
+            "user:owner",
+            "--team",
+            "team:repository",
+        ]
+        planned = subprocess.run(
+            base, check=False, capture_output=True, text=True, encoding="utf-8"
+        )
+        self.assertEqual(planned.returncode, 0, planned.stdout + planned.stderr)
+        plan_id = next(
+            line.removeprefix("PLAN ID ")
+            for line in planned.stdout.splitlines()
+            if line.startswith("PLAN ID ")
+        )
+        applied = subprocess.run(
+            [*base, "--plan-id", plan_id, "--apply"],
+            check=False,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+
     def test_query_glossary_returns_term_and_description(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
@@ -112,6 +146,9 @@ class GlossaryTests(unittest.TestCase):
                 "glossary_terms: [용어집, Memory Core]\n"
                 "---\n\n# Memory Core\n",
                 encoding="utf-8",
+            )
+            self.finalize(
+                repository, "docs/concepts/memory-core.md", "CONCEPT-MEMORY-CORE-001"
             )
             result = subprocess.run(
                 [

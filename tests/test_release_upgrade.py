@@ -146,7 +146,7 @@ class SemVerManifestTests(unittest.TestCase):
 
 
 class ConfigPlanTests(unittest.TestCase):
-    def test_config_v3_preserves_unknowns_and_normalizes_layout(self) -> None:
+    def test_config_v4_preserves_unknowns_and_normalizes_layout(self) -> None:
         source = config(1)
         source["memory"]["capture"] = "hook"
         source["documents"]["include"].extend(
@@ -157,8 +157,9 @@ class ConfigPlanTests(unittest.TestCase):
             ]
         )
         target = migrate_config_v3(source)
-        self.assertEqual(target["version"], 3)
-        self.assertEqual(target["memory"]["layout_version"], 1)
+        self.assertEqual(target["version"], 4)
+        self.assertEqual(target["memory"]["layout_version"], 2)
+        self.assertEqual(target["history"]["sidecar"], "stable-id")
         self.assertEqual(target["memory"]["capture"], "explicit")
         self.assertEqual(target["unknown_extension"], {"kept": True})
         self.assertNotIn(
@@ -181,7 +182,7 @@ class ConfigPlanTests(unittest.TestCase):
         self.assertIn("treewiki/**/assets/AGENTS.md", target["documents"]["exclude"])
         self.assertIn("skills/**/assets/AGENTS.md", target["documents"]["exclude"])
         with self.assertRaises(UpgradeException) as caught:
-            migrate_config_v3(config(4))
+            migrate_config_v3(config(5))
         self.assertEqual(caught.exception.code, UpgradeErrorCode.INCOMPATIBLE_NEWER)
 
     def test_plan_id_is_deterministic_and_stale_plan_does_not_mutate(self) -> None:
@@ -237,7 +238,7 @@ class ConfigPlanTests(unittest.TestCase):
             current = yaml.safe_load(
                 (repo / ".knowledge" / "config.yml").read_text(encoding="utf-8")
             )
-            self.assertEqual(current["version"], 3)
+            self.assertEqual(current["version"], 4)
             self.assertTrue(current["unknown_extension"]["kept"])
             events = [
                 json.loads(line)
@@ -248,7 +249,7 @@ class ConfigPlanTests(unittest.TestCase):
             config_events = [
                 event
                 for event in events
-                if event["action_id"] == "migrate_repository_config_v3"
+                if event["action_id"] == "migrate_repository_config_v4"
             ]
             self.assertEqual(
                 [event["state"] for event in config_events],
@@ -348,7 +349,7 @@ class SkillStageTests(unittest.TestCase):
             self.assertFalse(report["overall"]["apply_allowed"])
             self.assertEqual(report["authority"]["kind"], "official")
             self.assertIn("npx skills add", " ".join(report["guidance"]["apply"]))
-            self.assertFalse(any(action["stage"] == "skill" for action in report["actions"]))
+            self.assertFalse(any(action["stage"] == "runtime" for action in report["actions"]))
 
 
 class MemoryLayoutStageTests(unittest.TestCase):
@@ -467,7 +468,7 @@ class MemoryLayoutStageTests(unittest.TestCase):
             )
             self.assertEqual(
                 yaml.safe_load((repo / ".knowledge" / "config.yml").read_text(encoding="utf-8"))["version"],
-                3,
+                4,
             )
             memory_map = (
                 Path(result["backup_path"]) / "memory-map.json"
@@ -587,7 +588,7 @@ class MemoryLayoutStageTests(unittest.TestCase):
                     for action in report["actions"]
                     if action.get("kind") != "safety_prerequisite"
                 ],
-                ["migrate_repository_config_v3"],
+                ["migrate_repository_config_v4"],
             )
             self.assertTrue(report["overall"]["apply_allowed"])
 
@@ -604,7 +605,7 @@ class MemoryLayoutStageTests(unittest.TestCase):
                 yaml.safe_load(
                     (repo / ".knowledge" / "config.yml").read_text(encoding="utf-8")
                 )["version"],
-                3,
+                4,
             )
 
     def test_memory_target_conflict_blocks_all_mutation(self) -> None:
@@ -670,6 +671,7 @@ class IndexStageTests(unittest.TestCase):
             "build_search_index.py",
             "validate_knowledge.py",
             "memory_policy.py",
+            "document_history.py",
         ):
             (skill / "scripts" / name).write_bytes((SCRIPTS / name).read_bytes())
         write_release_manifest(skill, release="0.1.0")
@@ -1074,7 +1076,7 @@ class HookStageTests(unittest.TestCase):
                 for action in report["actions"]
                 if action.get("kind") != "safety_prerequisite"
             ]
-            self.assertEqual(meaningful[0]["id"], "migrate_repository_config_v3")
+            self.assertEqual(meaningful[0]["id"], "migrate_repository_config_v4")
             self.assertTrue(all(action["stage"] == "hook" for action in meaningful[1:]))
             apply_upgrade(
                 repo,
@@ -1120,7 +1122,7 @@ class UpgradeSafetyTests(unittest.TestCase):
                 report = diagnose_upgrade(repo, **kwargs)
 
                 def mutate(phase, action):
-                    if phase == "verify" and action["id"] == "migrate_repository_config_v3":
+                    if phase == "verify" and action["id"] == "migrate_repository_config_v4":
                         protected.write_text("after\n", encoding="utf-8")
 
                 with self.assertRaises(UpgradeException) as caught:
@@ -1141,7 +1143,7 @@ class UpgradeSafetyTests(unittest.TestCase):
             report = diagnose_upgrade(repo, **kwargs)
 
             def fail_verification(phase, action):
-                if phase == "verify" and action["id"] == "migrate_repository_config_v3":
+                if phase == "verify" and action["id"] == "migrate_repository_config_v4":
                     raise RuntimeError("verification fault")
 
             with self.assertRaises(UpgradeException) as caught:
@@ -1168,7 +1170,7 @@ class UpgradeSafetyTests(unittest.TestCase):
                 if event.get("phase") == "verify" and event.get("state") == "failed"
             ]
             self.assertEqual(len(failures), 1)
-            self.assertEqual(failures[0]["action_id"], "migrate_repository_config_v3")
+            self.assertEqual(failures[0]["action_id"], "migrate_repository_config_v4")
             self.assertEqual(
                 failures[0]["error_code"], UpgradeErrorCode.VERIFICATION_FAILED.value
             )
@@ -1203,7 +1205,7 @@ class UpgradeSafetyTests(unittest.TestCase):
             report = diagnose_upgrade(repo, **kwargs)
 
             def fail_before_replace(phase, action):
-                if phase == "replace" and action["id"] == "migrate_repository_config_v3":
+                if phase == "replace" and action["id"] == "migrate_repository_config_v4":
                     raise RuntimeError("replace fault")
 
             with self.assertRaises(UpgradeException) as caught:
@@ -1227,7 +1229,7 @@ class UpgradeSafetyTests(unittest.TestCase):
             config_events = [
                 event
                 for event in events
-                if event["action_id"] == "migrate_repository_config_v3"
+                if event["action_id"] == "migrate_repository_config_v4"
             ]
             self.assertEqual(
                 [event["state"] for event in config_events],

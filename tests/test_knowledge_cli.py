@@ -16,7 +16,7 @@ CLI = ROOT / "skills" / "treewiki" / "scripts" / "knowledge_cli.py"
 
 
 class KnowledgeCliTests(unittest.TestCase):
-    def write_config(self, root: Path, *, version: int = 3) -> None:
+    def write_config(self, root: Path, *, version: int = 4) -> None:
         (root / ".knowledge").mkdir(parents=True, exist_ok=True)
         vocabulary_dir = root / "docs" / "vocabulary"
         vocabulary_dir.mkdir(parents=True, exist_ok=True)
@@ -26,7 +26,7 @@ class KnowledgeCliTests(unittest.TestCase):
         (vocabulary_dir / "glossary.yml").write_text("terms: []\n", encoding="utf-8")
         includes = (
             ["docs/**/*.md", ".knowledge/private-memory/l0/**/*.md"]
-            if version == 3
+            if version >= 3
             else [".knowledge/private-memory/**/*.md"]
         )
         config = {
@@ -59,8 +59,14 @@ class KnowledgeCliTests(unittest.TestCase):
                 "managers": ["user:owner"],
             },
         }
-        if version == 3:
-            config["memory"]["layout_version"] = 1
+        if version >= 3:
+            config["memory"]["layout_version"] = 2 if version >= 4 else 1
+        if version >= 4:
+            config["memory"]["l3"] = {
+                "knowledge_path": "docs/memory/l3/knowledge",
+                "persona_path": "docs/memory/l3/persona",
+            }
+            config["history"] = {"schema": 1, "sidecar": "stable-id"}
         (root / ".knowledge" / "config.yml").write_text(
             yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8"
         )
@@ -108,7 +114,7 @@ class KnowledgeCliTests(unittest.TestCase):
         *,
         level: str = "l1",
         subject: str = "user:owner",
-        scope: str = "personal",
+        scope: str = "user",
         claim_key: str = "workflow.test",
         claim_value: str = "enabled",
         work: str = "one",
@@ -145,10 +151,11 @@ class KnowledgeCliTests(unittest.TestCase):
             "memory": {
                 "level": level,
                 "subject": subject,
-                "kind": "conditional-action",
+                "kind": "preference",
                 "scope": scope,
                 "claim_key": claim_key,
                 "claim_value": claim_value,
+                "confirmed_by": "user:owner",
                 "confidence": 1.0,
             },
             "sharing": sharing,
@@ -159,6 +166,8 @@ class KnowledgeCliTests(unittest.TestCase):
                 "grants": [],
             },
         }
+        if level == "l3":
+            metadata["category"] = "persona"
         target = root / "docs" / "memory" / level / f"{doc_id.casefold()}.md"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(
@@ -203,7 +212,7 @@ class KnowledgeCliTests(unittest.TestCase):
                 doc_id: {
                     "level": "l1",
                     "subject": "user:owner",
-                    "scope": "personal",
+                    "scope": "user",
                     "kind": "preference",
                     "claim_key": "workflow.legacy",
                     "claim_value": claim_value,
@@ -281,8 +290,9 @@ class KnowledgeCliTests(unittest.TestCase):
                 "--json",
             )
             self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
+            self.assertEqual(json.loads(allowed.stdout)["schema"], "treewiki.l3-candidates/v2")
             self.assertIn('"subject":"user:owner"', allowed.stdout)
-            self.assertIn('"scope":"personal"', allowed.stdout)
+            self.assertIn('"scope":"user"', allowed.stdout)
             self.assertIn('"claim_key":"workflow.test"', allowed.stdout)
             self.assertIn('"claim_value":"enabled"', allowed.stdout)
             self.assertIn('"status":"eligible"', allowed.stdout)
@@ -483,13 +493,15 @@ class KnowledgeCliTests(unittest.TestCase):
                 *identity,
             )
             self.assertEqual(dry_run.returncode, 0, dry_run.stdout + dry_run.stderr)
-            self.assertEqual(json.loads(dry_run.stdout)["status"], "planned")
+            review_plan = json.loads(dry_run.stdout)
+            self.assertEqual(review_plan["status"], "planned")
             target = root / "docs" / "memory" / "l3" / "persona-test-001.md"
             self.assertEqual(yaml.safe_load(target.read_text(encoding="utf-8").split("---")[1])["status"], "proposed")
 
             applied = self.run_cli(
                 "manage", "l3-review", str(root), proposal["id"],
-                "--candidate-digest", digest, "--decision", "approve", "--apply", "--json",
+                "--candidate-digest", digest, "--decision", "approve",
+                "--plan-id", review_plan["plan_id"], "--apply", "--json",
                 *identity,
             )
             self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
@@ -535,9 +547,15 @@ class KnowledgeCliTests(unittest.TestCase):
             self.assertEqual(blocked.returncode, 3, blocked.stdout + blocked.stderr)
             self.assertEqual(json.loads(blocked.stdout)["error"]["code"], "BLOCKED")
 
+            reject_plan = self.run_cli(
+                "manage", "l3-review", str(root), proposal["id"],
+                "--candidate-digest", digest, "--decision", "reject", "--json", *identity,
+            )
+            self.assertEqual(reject_plan.returncode, 0, reject_plan.stdout + reject_plan.stderr)
             rejected = self.run_cli(
                 "manage", "l3-review", str(root), proposal["id"],
-                "--candidate-digest", digest, "--decision", "reject", "--apply", "--json", *identity,
+                "--candidate-digest", digest, "--decision", "reject", "--plan-id",
+                json.loads(reject_plan.stdout)["plan_id"], "--apply", "--json", *identity,
             )
             self.assertEqual(rejected.returncode, 0, rejected.stdout + rejected.stderr)
             target = root / "docs" / "memory" / "l3" / "persona-test-one.md"
@@ -626,24 +644,34 @@ class KnowledgeCliTests(unittest.TestCase):
     def test_memory_finalize_is_dry_run_by_default(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.write_config(root, version=3)
+            self.write_config(root)
             result = self.run_cli(
                 "manage", "memory-finalize", str(root),
                 "--principal", "user:owner", "--team", "team:repo",
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn("MEMORY FINALIZE validate -> rebuild derived indexes", result.stdout)
+            self.assertIn("MEMORY FINALIZE lifecycle -> validate -> rebuild derived indexes", result.stdout)
             self.assertIn("DRY-RUN", result.stdout)
 
     def test_memory_finalize_apply_validates_and_rebuilds_bm25(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            self.write_config(root, version=3)
+            self.write_config(root)
             self.write_memory(
                 root, 1, level="l0", subject="user:owner", provenance="conversation:saved"
             )
+            dry_run = self.run_cli(
+                "manage", "memory-finalize", str(root),
+                "--principal", "user:owner", "--team", "team:repo",
+            )
+            self.assertEqual(dry_run.returncode, 0, dry_run.stdout + dry_run.stderr)
+            plan_id = next(
+                line.removeprefix("PLAN ID ")
+                for line in dry_run.stdout.splitlines()
+                if line.startswith("PLAN ID ")
+            )
             result = self.run_cli(
-                "manage", "memory-finalize", str(root), "--apply",
+                "manage", "memory-finalize", str(root), "--plan-id", plan_id, "--apply",
                 "--principal", "user:owner", "--team", "team:repo",
             )
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -659,7 +687,7 @@ class KnowledgeCliTests(unittest.TestCase):
                 "--principal", "user:owner", "--team", "team:repo",
             )
             self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
-            self.assertIn("requires config v3/layout 1", result.stderr)
+            self.assertIn("requires config v4/layout 2", result.stderr)
 
 
 if __name__ == "__main__":

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "treewiki",
+  "version": "0.2.0",
+  "description": "Governed repository knowledge with ACL retrieval, L3 review, history, and safe upgrades.",
+  "author": { "name": "j-token" },
+  "homepage": "https://github.com/j-token/treewiki",
+  "repository": "https://github.com/j-token/treewiki",
+  "license": "MIT",
+  "keywords": ["knowledge", "memory", "provenance", "codex", "mcp-apps"]
+}

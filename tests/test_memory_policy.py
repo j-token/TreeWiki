@@ -20,8 +20,9 @@ ZERO_HASH = "sha256:" + "0" * 64
 
 
 def config_v3() -> dict:
+    """Current v4 fixture; legacy function name keeps older test call sites compact."""
     return {
-        "version": 3,
+        "version": 4,
         "documents": {
             "include": [
                 "AGENTS.md",
@@ -31,10 +32,15 @@ def config_v3() -> dict:
             "exclude": [],
         },
         "memory": {
-            "layout_version": 1,
+            "layout_version": 2,
             "private_path": ".knowledge/private-memory",
             "shared_path": "docs/memory",
+            "l3": {
+                "knowledge_path": "docs/memory/l3/knowledge",
+                "persona_path": "docs/memory/l3/persona",
+            },
         },
+        "history": {"schema": 1, "sidecar": "stable-id"},
     }
 
 
@@ -74,10 +80,11 @@ def record(
             "memory": {
                 "level": level,
                 "subject": "user:owner",
-                "kind": "conditional-action",
-                "scope": "personal",
+                "kind": "preference",
+                "scope": "user",
                 "claim_key": "workflow.context-aware-automation",
                 "claim_value": value,
+                "confirmed_by": "user:owner",
                 "confidence": 1.0,
             },
             "sharing": sharing(work, source),
@@ -92,15 +99,15 @@ def record(
 
 
 class ConfigAndMutationTests(unittest.TestCase):
-    def test_config_v3_is_required_for_writes(self) -> None:
+    def test_config_v4_is_required_for_writes(self) -> None:
         memory_policy.require_config_v3(config_v3())
         old = config_v3()
-        old["version"] = 2
-        with self.assertRaisesRegex(memory_policy.MemoryPolicyError, "version must be 3") as caught:
+        old["version"] = 3
+        with self.assertRaisesRegex(memory_policy.MemoryPolicyError, "version must be 4") as caught:
             memory_policy.require_config_v3(old)
         self.assertEqual(caught.exception.code, "CONFIG_UPGRADE_REQUIRED")
         newer = config_v3()
-        newer["version"] = 4
+        newer["version"] = 5
         with self.assertRaises(memory_policy.MemoryPolicyError) as caught:
             memory_policy.require_config_v3(newer)
         self.assertEqual(caught.exception.code, "INCOMPATIBLE_NEWER")

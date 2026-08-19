@@ -22,7 +22,7 @@ class BootstrapHookTests(unittest.TestCase):
         self,
         repository: Path,
         *,
-        version: int = 3,
+        version: int = 4,
         capture: str = "explicit",
         managers: list[str] | None = None,
     ) -> None:
@@ -33,7 +33,7 @@ class BootstrapHookTests(unittest.TestCase):
                 {
                     "version": version,
                     "memory": {
-                        "layout_version": 1,
+                        "layout_version": 2,
                         "capture": capture,
                     },
                     "access_control": {
@@ -300,7 +300,7 @@ class BootstrapHookTests(unittest.TestCase):
 
     def test_standalone_installer_enforces_repository_contract_and_manager(self) -> None:
         cases = [
-            ({"version": 2}, "config version 3"),
+            ({"version": 2}, "config version 4"),
             ({"capture": "automatic"}, "memory.capture: explicit"),
             ({"managers": ["user:someone-else"]}, "management denied"),
         ]
@@ -312,7 +312,7 @@ class BootstrapHookTests(unittest.TestCase):
                     codex_home = base / "codex-home"
                     self._initialize_repository(
                         repository,
-                        version=overrides.get("version", 3),
+                        version=overrides.get("version", 4),
                         capture=overrides.get("capture", "explicit"),
                         managers=overrides.get("managers", [self.PRINCIPAL]),
                     )

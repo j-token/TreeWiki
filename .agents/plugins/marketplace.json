@@ -1,0 +1,20 @@
+{
+  "name": "treewiki-marketplace",
+  "interface": {
+    "displayName": "TreeWiki Marketplace"
+  },
+  "plugins": [
+    {
+      "name": "treewiki",
+      "source": {
+        "source": "local",
+        "path": "./plugins/treewiki"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
