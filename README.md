@@ -2,11 +2,11 @@
 
 [한국어](./README.ko.md)
 
-TreeWiki keeps repository maps, contracts, decisions, runbooks, document history, and governed memory usable by people and coding agents. Version 0.2.0 ships one Python core with thin Agent Plugin, Codex, and Claude Code adapters.
+TreeWiki keeps repository maps, contracts, decisions, runbooks, document history, and governed memory usable by people and coding agents. Version 0.2.1 ships one Python core with thin Agent Plugin, Codex, and Claude Code adapters.
 
 ## Release and compatibility
 
-The current TreeWiki release is **0.2.0**. The legacy `LMWiki` shim is removed, while historical IDs and provenance containing that name remain untouched. Config v4 and memory layout v2 add typed L3 knowledge/persona paths and stable-ID document-history sidecars.
+The current TreeWiki release is **0.2.1**. The legacy `LMWiki` shim is removed, while historical IDs and provenance containing that name remain untouched. Config v4 and memory layout v2 add typed L3 knowledge/persona paths and stable-ID document-history sidecars.
 
 Before a mutating operation, run the read-only status check and follow its guide:
 
@@ -59,15 +59,15 @@ Use `--scope project` instead for a repository-local alias. If both scopes exist
 The default installation is the versioned GitHub marketplace plugin. It follows [Agent Plugins 1.0.0](https://agent-plugins.org/specification); Codex metadata is a thin compatibility adapter over the same portable package.
 
 ```powershell
-codex plugin marketplace add j-token/treewiki --ref v0.2.0
+codex plugin marketplace add j-token/treewiki --ref v0.2.1
 codex plugin add treewiki@treewiki-marketplace
 ```
 
-Start a new Codex task and ask `Open the TreeWiki Workbench`. The Workbench first asks you to approve a repository path, principal, and team. It then provides Overview, ACL Search, document History, knowledge/persona L3 Review, and Upgrade screens. Binding changes, L3 decisions, and repository-local upgrades always make a dry-run plan first and apply only after a second approval with the exact plan ID and digest. Global skills, hooks, and governed-memory upgrades return to chat.
+Start a new Codex task and ask it to check TreeWiki for the current repository. Codex uses its native MCP tool, result, and approval surfaces to list bindings, inspect Overview, run ACL Search, read document History, review knowledge/persona L3 candidates, and plan upgrades. Binding changes, L3 decisions, and repository-local upgrades always make a dry-run plan first and apply only after explicit approval with the exact plan ID and digest. Global skills, hooks, and governed-memory upgrades remain chat-guided operations.
 
-The committed stdio MCP, Python core, PyYAML runtime, skill, and Workbench bundles need neither `npm install` nor `pip install` after installation. UI-less calls use the same tools and accept only an approved `bindingId`; callers cannot replace the repository or ACL identity per request. See [`plugins/treewiki/README.md`](plugins/treewiki/README.md).
+The committed stdio MCP, Python core, PyYAML runtime, and skill need neither `npm install` nor `pip install` after installation. Repository tools accept only an approved `bindingId`; callers cannot replace the repository or ACL identity per request. See [`plugins/treewiki/README.md`](plugins/treewiki/README.md).
 
-ChatGPT can use the same MCP Apps UI through the optional HTTP transport. Tunnels and Developer mode are development/deployment concerns documented separately in [`docs/chatgpt-http-development.md`](docs/chatgpt-http-development.md); they are not the Codex installation path.
+The optional HTTP transport exposes the same plain MCP tools without a custom App resource. Tunnels and Developer mode are development/deployment concerns documented separately in [`docs/chatgpt-http-development.md`](docs/chatgpt-http-development.md); they are not the Codex installation path.
 
 ```text
 Use $treewiki to adopt this repository and preserve its existing documentation.

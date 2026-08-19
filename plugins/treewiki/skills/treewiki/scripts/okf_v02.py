@@ -27,8 +27,8 @@ def _actor_for(metadata: Mapping[str, Any]) -> str:
     if isinstance(authored, str) and authored.startswith("user:"):
         return "human:" + authored.split(":", 1)[1]
     if isinstance(authored, str) and authored.startswith("agent:"):
-        return "treewiki/0.2.0"
-    return "treewiki/0.2.0"
+        return "treewiki/0.2.1"
+    return "treewiki/0.2.1"
 
 
 def _sources(metadata: Mapping[str, Any]) -> list[dict[str, Any]]:

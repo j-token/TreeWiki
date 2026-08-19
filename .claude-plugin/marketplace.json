@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "TreeWiki plugins for governed repository knowledge and memory.",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "plugins": [
     {
       "name": "treewiki",
       "source": "./plugins/treewiki-claude",
       "description": "Route repository knowledge, governed memory, history, and upgrades through TreeWiki.",
-      "version": "0.2.0"
+      "version": "0.2.1"
     }
   ]
 }

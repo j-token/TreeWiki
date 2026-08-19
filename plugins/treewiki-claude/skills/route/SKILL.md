@@ -5,7 +5,7 @@ description: Route TreeWiki adoption, query, update, memory, L3 review, and upgr
 
 # TreeWiki router
 
-TreeWiki plugin version: `0.2.0`.
+TreeWiki plugin version: `0.2.1`.
 
 Use the current unfinished conversation request plus `$ARGUMENTS`. Before choosing
 a write mode, inspect the nearest `.knowledge/config.yml` and run read-only

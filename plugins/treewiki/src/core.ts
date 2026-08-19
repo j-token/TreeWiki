@@ -60,7 +60,7 @@ function relationIds(value: unknown, type: string): string[] {
   return value.filter((item) => objectValue(item).type === type)
     .map((item) => objectValue(item).target).filter((item): item is string => typeof item === "string").sort();
 }
-const UI_APPLY_STAGES = new Set(["config", "document-history", "adapters", "index"]);
+const REPOSITORY_APPLY_STAGES = new Set(["config", "document-history", "adapters", "index"]);
 
 export class TreeWikiCore {
   private readonly executor: CommandExecutor;
@@ -151,14 +151,14 @@ export class TreeWikiCore {
   }
   async planUpgradeStage(stage: string) {
     const report = await this.upgradeStatus(stage); const overall = objectValue(report.overall);
-    return { schema: "treewiki.workbench-upgrade/v1", stage, planId: String(overall.plan_id ?? ""),
-      statusDigest: digest(report), report, applyAllowed: UI_APPLY_STAGES.has(stage) && overall.apply_allowed === true,
-      blockingReason: UI_APPLY_STAGES.has(stage) ? String(overall.blocking_reason ?? "") :
+    return { schema: "treewiki.upgrade-plan/v1", stage, planId: String(overall.plan_id ?? ""),
+      statusDigest: digest(report), report, applyAllowed: REPOSITORY_APPLY_STAGES.has(stage) && overall.apply_allowed === true,
+      blockingReason: REPOSITORY_APPLY_STAGES.has(stage) ? String(overall.blocking_reason ?? "") :
         `${stage} requires chat approval because it may change global skills, hooks, or governed memory.` };
   }
   async applyUpgradeStage(stage: string, planId: string, statusDigest: string) {
     const current = await this.planUpgradeStage(stage);
-    if (!current.applyAllowed) throw new Error(current.blockingReason || "this upgrade stage cannot be applied in Workbench");
+    if (!current.applyAllowed) throw new Error(current.blockingReason || "this upgrade stage cannot be applied through the native MCP tool");
     if (current.planId !== planId || current.statusDigest !== statusDigest) throw new Error("upgrade plan or status digest is stale");
     return JSON.parse(await this.run(["manage", "upgrade", this.binding.repository, "--stage", stage, "--plan-id", planId,
       "--offline", "--apply", "--json", ...this.identityArgs()], [0, 2]));

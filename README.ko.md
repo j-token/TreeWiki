@@ -1,10 +1,10 @@
 # TreeWiki
 
-TreeWiki는 저장소 지도, 계약, 결정, runbook, 문서 이력과 승인 기반 기억을 사람과 코딩 에이전트가 함께 유지하도록 돕습니다. 0.2.0은 하나의 Python 코어에 Agent Plugin, Codex, Claude Code 어댑터를 얇게 연결합니다.
+TreeWiki는 저장소 지도, 계약, 결정, runbook, 문서 이력과 승인 기반 기억을 사람과 코딩 에이전트가 함께 유지하도록 돕습니다. 0.2.1은 하나의 Python 코어에 Agent Plugin, Codex, Claude Code 어댑터를 얇게 연결합니다.
 
 ## 릴리스와 호환성
 
-현재 TreeWiki 릴리스는 **0.2.0**입니다. `LMWiki` 호환 shim은 제거했지만 과거 ID와 provenance는 바꾸지 않습니다. config v4와 memory layout v2는 유형화된 L3 knowledge/persona 경로와 안정 ID 문서 이력을 추가합니다.
+현재 TreeWiki 릴리스는 **0.2.1**입니다. `LMWiki` 호환 shim은 제거했지만 과거 ID와 provenance는 바꾸지 않습니다. config v4와 memory layout v2는 유형화된 L3 knowledge/persona 경로와 안정 ID 문서 이력을 추가합니다.
 
 쓰기 전에 상태와 안내를 확인합니다.
 
@@ -57,15 +57,15 @@ python skills/treewiki/scripts/knowledge_cli.py manage setup-claude-alias <repos
 기본 설치 경로는 버전이 고정된 GitHub marketplace 플러그인입니다. 본체는 [Agent Plugins 1.0.0](https://agent-plugins.org/specification)을 따르고 Codex 메타데이터는 같은 portable 패키지를 연결하는 호환 어댑터입니다.
 
 ```powershell
-codex plugin marketplace add j-token/treewiki
+codex plugin marketplace add j-token/treewiki --ref v0.2.1
 codex plugin add treewiki@treewiki-marketplace
 ```
 
-새 Codex 작업에서 `TreeWiki Workbench 열어줘`라고 요청합니다. 먼저 저장소 경로·principal·team을 승인한 뒤 Overview, ACL Search, 문서 History, knowledge/persona L3 Review, Upgrade 화면을 사용할 수 있습니다. binding 변경, L3 결정, 저장소 로컬 업그레이드는 첫 클릭에서 dry-run 계획만 만들고 정확한 plan ID와 digest를 확인한 두 번째 승인에서만 적용합니다. 전역 스킬·hook과 승인형 기억 업그레이드는 채팅으로 넘깁니다.
+새 Codex 작업에서 현재 저장소의 TreeWiki 상태를 확인해 달라고 요청합니다. Codex는 자체 MCP 도구·결과·승인 UI를 사용해 binding, Overview, ACL Search, 문서 History, knowledge/persona L3 후보와 업그레이드 계획을 보여줍니다. binding 변경, L3 결정, 저장소 로컬 업그레이드는 먼저 dry-run 계획만 만들고 정확한 plan ID와 digest에 대한 명시적 승인 뒤에만 적용합니다. 전역 스킬·hook과 승인형 기억 업그레이드는 채팅으로 안내합니다.
 
-추적되는 stdio MCP, Python 코어, PyYAML, 스킬, Workbench 번들에는 설치 후 `npm install`이나 `pip install`이 필요하지 않습니다. UI 없이도 같은 도구를 호출할 수 있으며 업무 도구는 승인된 `bindingId`만 받아 매 호출에서 저장소나 ACL identity가 바뀌는 일을 막습니다. 자세한 구조는 [`plugins/treewiki/README.md`](plugins/treewiki/README.md)에 있습니다.
+추적되는 stdio MCP, Python 코어, PyYAML과 스킬에는 설치 후 `npm install`이나 `pip install`이 필요하지 않습니다. 저장소 도구는 승인된 `bindingId`만 받아 매 호출에서 저장소나 ACL identity가 바뀌는 일을 막습니다. 자세한 구조는 [`plugins/treewiki/README.md`](plugins/treewiki/README.md)에 있습니다.
 
-ChatGPT는 선택적 HTTP transport로 같은 MCP Apps UI를 사용할 수 있습니다. 터널과 Developer mode는 Codex 설치 절차가 아니며 [`docs/chatgpt-http-development.md`](docs/chatgpt-http-development.md)에 별도로 설명합니다.
+선택적 HTTP transport도 커스텀 App 리소스 없이 같은 일반 MCP 도구를 제공합니다. 터널과 Developer mode는 Codex 설치 절차가 아니며 [`docs/chatgpt-http-development.md`](docs/chatgpt-http-development.md)에 별도로 설명합니다.
 
 ## 기억과 공유
 

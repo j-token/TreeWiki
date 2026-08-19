@@ -310,16 +310,16 @@ class AdapterAndCompatibilityTests(unittest.TestCase):
         plugin = marketplace["plugins"][0]
         self.assertEqual(plugin["name"], "treewiki")
         self.assertEqual(plugin["source"], "./plugins/treewiki-claude")
-        self.assertEqual(plugin["version"], "0.2.0")
+        self.assertEqual(plugin["version"], "0.2.1")
 
         for readme_name in ("README.md", "README.ko.md"):
             readme = (ROOT / readme_name).read_text(encoding="utf-8")
             self.assertIn("/plugin marketplace add j-token/treewiki", readme)
             self.assertIn("/plugin install treewiki@treewiki-marketplace", readme)
             self.assertIn("manage setup-claude-alias", readme)
-            self.assertIn("codex plugin marketplace add j-token/treewiki --ref v0.2.0", readme)
+            self.assertIn("codex plugin marketplace add j-token/treewiki --ref v0.2.1", readme)
             self.assertIn("codex plugin add treewiki@treewiki-marketplace", readme)
-            self.assertIn("TreeWiki Workbench", readme)
+            self.assertNotIn("TreeWiki Workbench", readme)
 
     def test_claude_alias_scope_shadow_and_plugin_version(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -329,7 +329,7 @@ class AdapterAndCompatibilityTests(unittest.TestCase):
             plugin = base / "plugin"
             manifest = plugin / ".claude-plugin" / "plugin.json"
             manifest.parent.mkdir(parents=True)
-            manifest.write_text('{"name":"treewiki","version":"0.2.0"}\n', encoding="utf-8")
+            manifest.write_text('{"name":"treewiki","version":"0.2.1"}\n', encoding="utf-8")
             source = ROOT / "skills" / "treewiki" / "assets" / "claude-alias" / "SKILL.md"
             with mock.patch.dict(os.environ, {"CLAUDE_CONFIG_DIR": str(base / "claude")}, clear=False):
                 user = plan_alias(repository, scope="user", plugin_root=plugin, alias_source=source)
@@ -338,11 +338,11 @@ class AdapterAndCompatibilityTests(unittest.TestCase):
                 apply_alias(project, plan_id=project["plan_id"])
                 shadowed = plan_alias(repository, scope="project", plugin_root=plugin, alias_source=source)
                 self.assertEqual(shadowed["shadow"]["warning"], "ALIAS_SHADOWED")
-                self.assertIn("0.2.0", Path(user["target"]).read_text(encoding="utf-8"))
+                self.assertIn("0.2.1", Path(user["target"]).read_text(encoding="utf-8"))
             with self.assertRaises(ClaudeAliasError):
                 plan_alias(repository, scope="", plugin_root=plugin, alias_source=source)
             manifest.write_text('{"name":"treewiki","version":"0.1.0"}\n', encoding="utf-8")
-            with self.assertRaisesRegex(ClaudeAliasError, "upgrade.*0.2.0"):
+            with self.assertRaisesRegex(ClaudeAliasError, "upgrade.*0.2.1"):
                 plan_alias(repository, scope="project", plugin_root=plugin, alias_source=source)
 
     def test_codex_claude_and_agent_plugin_runtime_hashes_are_identical(self) -> None:
@@ -362,30 +362,33 @@ class AdapterAndCompatibilityTests(unittest.TestCase):
         self.assertEqual(claude_runtime["core_hash"], release["runtime"]["core_hash"])
         self.assertEqual(release["adapters"]["codex"]["kind"], "agent-plugin")
         self.assertEqual(release["adapters"]["codex"]["specification"], "agent-plugins/1.0.0-working-draft")
-        self.assertEqual(release["adapters"]["codex"]["ui_resource"], "ui://treewiki/workbench-v1.html")
+        self.assertEqual(release["adapters"]["codex"]["interface"], "native-mcp-tools")
+        self.assertNotIn("entrypoint", release["adapters"]["codex"])
+        self.assertNotIn("ui_resource", release["adapters"]["codex"])
+        self.assertNotIn("workbench_hash", release["adapters"]["codex"])
 
-    def test_agent_plugin_uses_workbench_and_exact_plan_apply(self) -> None:
+    def test_agent_plugin_uses_native_mcp_tools_and_exact_plan_apply(self) -> None:
         plugin = ROOT / "plugins" / "treewiki"
         server = (plugin / "src" / "server.ts").read_text(encoding="utf-8")
-        widget = (plugin / "web" / "src" / "workbench.html").read_text(encoding="utf-8")
         package = json.loads((plugin / "package.json").read_text(encoding="utf-8"))
-        self.assertEqual(package["version"], "0.2.0")
+        self.assertEqual(package["version"], "0.2.1")
         self.assertIn('"search"', server)
         self.assertIn('"fetch"', server)
-        self.assertIn("RESOURCE_MIME_TYPE", server)
-        self.assertIn("ui: { resourceUri: WORKBENCH_URI", server)
         self.assertIn('"apply_l3_review"', server)
         self.assertIn('"apply_upgrade_stage"', server)
         self.assertIn('"apply_binding_change"', server)
         self.assertIn("candidateDigest", server)
         self.assertIn("planId", server)
-        self.assertIn('rpc("ui/initialize"', widget)
-        self.assertIn('rpc("tools/call"', widget)
-        self.assertIn('rpc("ui/message"', widget)
-        self.assertIn('rpc("ui/update-model-context"', widget)
-        self.assertIn("window.openai?.requestDisplayMode", widget)
-        for screen in ("setup", "overview", "search", "history", "l3", "upgrade"):
-            self.assertIn(f'id="{screen}"', widget)
+        self.assertIn("destructiveHint: true", server)
+        self.assertNotIn("registerAppTool", server)
+        self.assertNotIn("registerAppResource", server)
+        self.assertNotIn("openai/outputTemplate", server)
+        self.assertNotIn("open_treewiki_workbench", server)
+        self.assertNotIn("workbench_status", (ROOT / "skills" / "treewiki" / "scripts" / "upgrade.py").read_text(encoding="utf-8"))
+        self.assertNotIn("@modelcontextprotocol/ext-apps", package["dependencies"])
+        self.assertNotIn("build:widget", package["scripts"])
+        self.assertFalse((plugin / "web" / "src" / "workbench.html").exists())
+        self.assertFalse((plugin / "web" / "dist" / "workbench.html").exists())
 
     def test_router_fixtures_cover_six_modes_and_progressive_references(self) -> None:
         plugin = ROOT / "plugins" / "treewiki-claude"

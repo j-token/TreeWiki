@@ -20,9 +20,11 @@ test("L3 apply forwards only the approved binding identity and exact plan", asyn
   assert.ok(calls[0].includes(planId)); assert.ok(calls[0].includes(digest));
 });
 
-test("global and memory upgrade stages are never applyable in Workbench", async () => {
+test("global and memory upgrade stages are never applyable through native MCP tools", async () => {
   const executor:CommandExecutor=async()=>({exitCode:2,stderr:"",stdout:JSON.stringify({overall:{status:"upgrade_required",plan_id:`sha256:${"c".repeat(64)}`,apply_allowed:true}})});
   const core=new TreeWikiCore(config,binding,executor);
-  assert.equal((await core.planUpgradeStage("runtime")).applyAllowed,false);
+  const runtime=await core.planUpgradeStage("runtime");
+  assert.equal(runtime.schema,"treewiki.upgrade-plan/v1");
+  assert.equal(runtime.applyAllowed,false);
   assert.equal((await core.planUpgradeStage("memory-layout")).applyAllowed,false);
 });

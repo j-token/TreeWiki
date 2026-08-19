@@ -10,7 +10,7 @@ from typing import Any, Mapping
 
 ALIAS_PLAN_SCHEMA = "treewiki.claude-alias-plan/v1"
 SUPPORTED_SCOPES = {"user", "project"}
-EXPECTED_PLUGIN_VERSION = "0.2.0"
+EXPECTED_PLUGIN_VERSION = "0.2.1"
 
 
 class ClaudeAliasError(ValueError):

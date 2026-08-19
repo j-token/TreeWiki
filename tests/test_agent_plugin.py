@@ -49,6 +49,10 @@ class AgentPluginManifestTests(unittest.TestCase):
         self.assertEqual(codex["mcpServers"], portable["mcpServers"])
         manifest = self.load(PLUGIN / ".codex-plugin" / "plugin.json")
         self.assertEqual(manifest["mcpServers"], "./.mcp.json")
+        self.assertEqual(manifest["version"], "0.2.1")
+        self.assertEqual(manifest["interface"]["displayName"], "TreeWiki")
+        self.assertIn("Native MCP tools", manifest["interface"]["capabilities"])
+        self.assertNotIn("MCP Apps UI", manifest["interface"]["capabilities"])
 
 
 if __name__ == "__main__":
