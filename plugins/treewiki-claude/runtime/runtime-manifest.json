@@ -1,18 +1,18 @@
 {
-  "core_hash": "sha256:0150968b4348cadc9905bd0157847f28861c7019dc877fd2d02df1db29abaa25",
-  "core_version": "0.2.0",
+  "core_hash": "sha256:5934d43a29fbf34d9ce71d2feded6cb1e17674972187906305535d13fec5a20e",
+  "core_version": "0.2.1",
   "files": {
     "build_embedding_index.py": "sha256:bf1c00122b8d51c04755e8769fca7f93600f949397c103f03f5018c2c06f671b",
     "build_search_index.py": "sha256:75e08481995c39047868626ef56257fdd0b85036347421445ae3a4b9fe157e20",
-    "claude_alias.py": "sha256:6cf02a0852c04fd22af9fa196c886b234f839595f9ed27d0b0c533e055dbb681",
+    "claude_alias.py": "sha256:0c459cdded77d6e31f44a7261f8608d7cf417f7b628a918880196c085805e3ab",
     "document_history.py": "sha256:69a71559a18894beb9d9d44c9795aa9361f266c5122be86ae386088061bc9b65",
     "knowledge_cli.py": "sha256:2ae40816276e26141c3fa9133b0976184e7209e76c5942c5fb9dfd4b99bb0778",
     "memory_policy.py": "sha256:d20aa3cde95d4762c16afd29aba7d6e26e4a0f82f194cf4b4b552d50713aa387",
-    "okf_v02.py": "sha256:c3354bb5193e97e80b3fe3a96cfdebb403baf6a0a9fb2634746d0702c155bdd3",
+    "okf_v02.py": "sha256:c5d1c7329d76d68cdfd9be37aa9fe5b3d36fc1367379c237a830fe47fef6ce44",
     "release_manifest.py": "sha256:1dc6c938f5569de7e37d0ff063ec5b4e31ab28e17d179ce269bd6ed0acaf0135",
-    "upgrade.py": "sha256:0f6fb7df4d278d6ba4a6ed0e61ec1c526a77349b8dc1e735752da728f14a9539",
+    "upgrade.py": "sha256:bab537891968040a33f58362ce7f7e3b72be8267d035d7ff60846aae07e5dab1",
     "validate_knowledge.py": "sha256:30f400452f605d00ca78d9dac871ee93184bebd5f9df43f3d119cb0a6f3fff2b"
   },
-  "release_version": "0.2.0",
+  "release_version": "0.2.1",
   "schema": "treewiki.adapter-runtime/v1"
 }

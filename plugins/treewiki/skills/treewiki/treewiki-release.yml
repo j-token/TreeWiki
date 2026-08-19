@@ -1,9 +1,9 @@
 format: 1
 product: treewiki
 display_name: TreeWiki
-release: 0.2.0
+release: 0.2.1
 repository: j-token/treewiki
-source_ref: v0.2.0
+source_ref: v0.2.1
 config_schema:
   minimum: 1
   current: 4
@@ -22,7 +22,7 @@ distribution:
 artifacts:
   files:
   - path: SKILL.md
-    sha256: a2f3b337c08f5c8d0351da2a8cc5f45406f3ea5028b1c14c15c38195943d6a50
+    sha256: 26a91cbc31a884903f6ea5aa328570cbfb4d3776494f9156fb500b90c92459ff
   - path: agents/openai.yaml
     sha256: 036d7ad016744b6ecf96f09eeb3dab302c5f1b87dada96ec2348ee79adec4517
   - path: assets/AGENTS.md
@@ -96,15 +96,15 @@ artifacts:
   - path: scripts/bootstrap_treewiki.py
     sha256: 521bdc6cf7d2d5fe09bb073a4825ee9ac1f60b2ee511d96fb96da57e52798b14
   - path: scripts/build_adapter_bundles.py
-    sha256: e1fbb9dbf451f842fded07a3f4947af8123fd7c4d0eb151ee95b349389a4a2c8
+    sha256: 844eebce44566630994e29aa7d0751ed1737ffedb5f09d579050a4048d3c00fa
   - path: scripts/build_embedding_index.py
     sha256: bf1c00122b8d51c04755e8769fca7f93600f949397c103f03f5018c2c06f671b
   - path: scripts/build_release_manifest.py
-    sha256: b7c6d877fd2282d75a94ee13c01ea6c96d4331261f24016f82a32cda4da173e4
+    sha256: 1550ef03a04e42b77884a3cda1105c3b21abcfb36f346a39864882ecd9ad10a9
   - path: scripts/build_search_index.py
     sha256: 75e08481995c39047868626ef56257fdd0b85036347421445ae3a4b9fe157e20
   - path: scripts/claude_alias.py
-    sha256: 6cf02a0852c04fd22af9fa196c886b234f839595f9ed27d0b0c533e055dbb681
+    sha256: 0c459cdded77d6e31f44a7261f8608d7cf417f7b628a918880196c085805e3ab
   - path: scripts/document_history.py
     sha256: 69a71559a18894beb9d9d44c9795aa9361f266c5122be86ae386088061bc9b65
   - path: scripts/install_treewiki_hooks.py
@@ -114,7 +114,7 @@ artifacts:
   - path: scripts/memory_policy.py
     sha256: d20aa3cde95d4762c16afd29aba7d6e26e4a0f82f194cf4b4b552d50713aa387
   - path: scripts/okf_v02.py
-    sha256: c3354bb5193e97e80b3fe3a96cfdebb403baf6a0a9fb2634746d0702c155bdd3
+    sha256: c5d1c7329d76d68cdfd9be37aa9fe5b3d36fc1367379c237a830fe47fef6ce44
   - path: scripts/release_manifest.py
     sha256: 1dc6c938f5569de7e37d0ff063ec5b4e31ab28e17d179ce269bd6ed0acaf0135
   - path: scripts/requirements.txt
@@ -122,26 +122,24 @@ artifacts:
   - path: scripts/treewiki_hook.py
     sha256: 3c29d3e99cfb30f9ee4fd8a605775d902d57c3faadc9eafaf9acada4a6ec43ff
   - path: scripts/upgrade.py
-    sha256: 0f6fb7df4d278d6ba4a6ed0e61ec1c526a77349b8dc1e735752da728f14a9539
+    sha256: bab537891968040a33f58362ce7f7e3b72be8267d035d7ff60846aae07e5dab1
   - path: scripts/validate_knowledge.py
     sha256: 30f400452f605d00ca78d9dac871ee93184bebd5f9df43f3d119cb0a6f3fff2b
 runtime:
-  core_version: 0.2.0
-  core_hash: sha256:0150968b4348cadc9905bd0157847f28861c7019dc877fd2d02df1db29abaa25
+  core_version: 0.2.1
+  core_hash: sha256:5934d43a29fbf34d9ce71d2feded6cb1e17674972187906305535d13fec5a20e
   config_version: 4
   memory_layout_version: 2
   history_schema: 1
 adapters:
   codex:
     kind: agent-plugin
-    entrypoint: open_treewiki_workbench
+    interface: native-mcp-tools
     specification: agent-plugins/1.0.0-working-draft
     marketplace: treewiki-marketplace
     mcp_transport: stdio
     runtime_bundle: plugins/treewiki/dist/treewiki-mcp.mjs
-    ui_resource: ui://treewiki/workbench-v1.html
-    bundle_hash: sha256:f4637f8ff4dedb803da7ced1a02eb07c747132815a96f515bc246ec437b0aae3
-    workbench_hash: sha256:c5d110aa4cf1be91f09c60f209ebe3cb8997d4b3086a432b170007ed637661e8
+    bundle_hash: sha256:42131cf7db49059a46406330a6cfecd98b24a533896151e03672a9b68e873f49
   claude:
     kind: plugin
     entrypoint: /treewiki

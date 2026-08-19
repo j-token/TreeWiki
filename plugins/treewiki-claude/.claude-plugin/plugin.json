@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "treewiki",
   "displayName": "TreeWiki",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Route repository knowledge, governed memory, history, and upgrades through TreeWiki.",
   "author": {
     "name": "j-token"

@@ -1839,7 +1839,6 @@ def diagnose_upgrade(
     mcp_config_status = ComponentStatus.MISSING
     codex_manifest_status = ComponentStatus.MISSING
     marketplace_status = ComponentStatus.MISSING
-    workbench_status = ComponentStatus.MISSING
     bundle_status = ComponentStatus.MISSING
     try:
         portable = json.loads((agent_root / "plugin.json").read_text(encoding="utf-8"))
@@ -1912,12 +1911,6 @@ def diagnose_upgrade(
             == expected_agent.get("bundle_hash")
             else ComponentStatus.UPGRADE_REQUIRED
         )
-        workbench_status = (
-            ComponentStatus.CURRENT
-            if _hash_file_or_missing(agent_root / "web" / "dist" / "workbench.html")
-            == expected_agent.get("workbench_hash")
-            else ComponentStatus.UPGRADE_REQUIRED
-        )
         runtime_files = runtime_data.get("files", {})
         runtime_files_current = isinstance(runtime_files, Mapping) and all(
             _hash_file_or_missing(agent_root / "skills" / "treewiki" / "scripts" / str(name))
@@ -1932,7 +1925,6 @@ def diagnose_upgrade(
                     portable_manifest_status,
                     mcp_config_status,
                     codex_manifest_status,
-                    workbench_status,
                     bundle_status,
                 )
             )
@@ -1966,7 +1958,6 @@ def diagnose_upgrade(
             mcp_config_status=mcp_config_status.value,
             codex_manifest_status=codex_manifest_status.value,
             marketplace_status=marketplace_status.value,
-            workbench_status=workbench_status.value,
             bundle_status=bundle_status.value,
         )
     )

@@ -8,7 +8,7 @@ import importlib.metadata
 from pathlib import Path
 
 
-RELEASE = "0.2.0"
+RELEASE = "0.2.1"
 RUNTIME_FILES = (
     "build_embedding_index.py",
     "build_search_index.py",

@@ -16,6 +16,7 @@ try:
         MANIFEST_FILENAME,
         ManifestErrorCode,
         ManifestValidationError,
+        compare_semver,
         iter_distribution_files,
         load_manifest,
         parse_manifest,
@@ -27,6 +28,7 @@ except ImportError:  # pragma: no cover - package-style import
         MANIFEST_FILENAME,
         ManifestErrorCode,
         ManifestValidationError,
+        compare_semver,
         iter_distribution_files,
         load_manifest,
         parse_manifest,
@@ -35,7 +37,7 @@ except ImportError:  # pragma: no cover - package-style import
     )
 
 
-DEFAULT_RELEASE = "0.2.0"
+DEFAULT_RELEASE = "0.2.1"
 DEFAULT_REPOSITORY = "j-token/treewiki"
 DEFAULT_INSTALL_COMMAND = (
     "npx skills add j-token/treewiki --skill treewiki -g -a codex -y --copy"
@@ -63,7 +65,6 @@ def build_manifest_data(
 ) -> dict[str, Any]:
     repository_root = Path(skill_root).resolve().parents[1]
     agent_bundle = repository_root / "plugins" / "treewiki" / "dist" / "treewiki-mcp.mjs"
-    workbench_bundle = repository_root / "plugins" / "treewiki" / "web" / "dist" / "workbench.html"
     payload: dict[str, Any] = dict(base or {})
     payload.update(
         {
@@ -78,7 +79,7 @@ def build_manifest_data(
     payload["config_schema"] = {"minimum": 1, "current": 4, "maximum": 4}
     payload["compatibility"] = {
         "legacy_skill": "lmwiki",
-        "mode": "removed" if release == "0.2.0" else "warning-shim",
+        "mode": "removed" if compare_semver(release, "0.2.0") >= 0 else "warning-shim",
         "introduced_in": "0.1.0",
         "remove_in": "0.2.0",
     }
@@ -98,19 +99,13 @@ def build_manifest_data(
     payload["adapters"] = {
         "codex": {
             "kind": "agent-plugin",
-            "entrypoint": "open_treewiki_workbench",
+            "interface": "native-mcp-tools",
             "specification": "agent-plugins/1.0.0-working-draft",
             "marketplace": "treewiki-marketplace",
             "mcp_transport": "stdio",
             "runtime_bundle": "plugins/treewiki/dist/treewiki-mcp.mjs",
-            "ui_resource": "ui://treewiki/workbench-v1.html",
             "bundle_hash": (
                 "sha256:" + sha256_file(agent_bundle) if agent_bundle.is_file() else "missing"
-            ),
-            "workbench_hash": (
-                "sha256:" + sha256_file(workbench_bundle)
-                if workbench_bundle.is_file()
-                else "missing"
             ),
         },
         "claude": {

@@ -4,7 +4,6 @@ The generated `dist/treewiki-mcp.mjs` includes these packages and their transiti
 dependencies under their respective licenses:
 
 - Model Context Protocol TypeScript SDK — MIT
-- MCP Apps (`@modelcontextprotocol/ext-apps`) — MIT
 - Zod — MIT
 - YAML — ISC
 - Express and its transitive dependencies — MIT and compatible permissive licenses

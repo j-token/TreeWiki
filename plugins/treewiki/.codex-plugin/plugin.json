@@ -1,7 +1,7 @@
 {
   "name": "treewiki",
-  "version": "0.2.0",
-  "description": "Governed repository knowledge, document history, L3 review, and upgrade planning in the TreeWiki Workbench.",
+  "version": "0.2.1",
+  "description": "Governed repository knowledge, document history, L3 review, and upgrade planning through native MCP tools.",
   "author": {
     "name": "j-token"
   },
@@ -9,13 +9,13 @@
   "license": "MIT",
   "skills": "./skills/",
   "interface": {
-    "displayName": "TreeWiki Workbench",
+    "displayName": "TreeWiki",
     "shortDescription": "Govern repository knowledge from Codex.",
-    "longDescription": "Connect approved repositories, search ACL-filtered knowledge, inspect document history, review L3 candidates, and plan safe TreeWiki upgrades from one portable Workbench.",
+    "longDescription": "Connect approved repositories, search ACL-filtered knowledge, inspect document history, review L3 candidates, and plan safe TreeWiki upgrades through Codex-native MCP tools.",
     "developerName": "j-token",
     "category": "Developer Tools",
-    "capabilities": ["Skills", "MCP Apps UI", "Governed memory"],
-    "defaultPrompt": "Open the TreeWiki Workbench and show the status of my approved repositories."
+    "capabilities": ["Skills", "Native MCP tools", "Governed memory"],
+    "defaultPrompt": "Check the TreeWiki bindings for my current repository and show its status. Plan any required binding change and wait for my approval before applying it."
   },
   "mcpServers": "./.mcp.json"
 }
