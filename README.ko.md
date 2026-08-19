@@ -57,7 +57,7 @@ python skills/treewiki/scripts/knowledge_cli.py manage setup-claude-alias <repos
 기본 설치 경로는 버전이 고정된 GitHub marketplace 플러그인입니다. 본체는 [Agent Plugins 1.0.0](https://agent-plugins.org/specification)을 따르고 Codex 메타데이터는 같은 portable 패키지를 연결하는 호환 어댑터입니다.
 
 ```powershell
-codex plugin marketplace add j-token/treewiki --ref v0.2.0
+codex plugin marketplace add j-token/treewiki
 codex plugin add treewiki@treewiki-marketplace
 ```
 
