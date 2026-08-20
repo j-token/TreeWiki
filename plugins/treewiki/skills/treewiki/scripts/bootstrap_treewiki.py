@@ -32,10 +32,11 @@ DIRECTORIES = [
     ".knowledge/index",
     ".knowledge/hooks",
     ".knowledge/hooks/state",
+    ".knowledge/document-history",
     ".knowledge/private-memory/l0",
 ]
 
-CONFIG_VERSION = 4
+CONFIG_VERSION = 5
 MEMORY_LAYOUT_VERSION = 2
 PRIVATE_MEMORY_PATH = ".knowledge/private-memory"
 SHARED_MEMORY_PATH = "docs/memory"
@@ -47,18 +48,20 @@ def _finalize_initial_documents(root: Path, created_paths: list[str]) -> None:
 
     config = yaml.safe_load((root / ".knowledge" / "config.yml").read_text(encoding="utf-8"))
     documents = managed_documents(root, config)
+    created_documents: list[Path] = []
     created_ids: list[str] = []
     created_set = set(created_paths)
     for document in documents:
         relative = document.relative_to(root).as_posix()
         if relative not in created_set:
             continue
+        created_documents.append(document)
         metadata, _, _ = parse_document(document)
         if isinstance(metadata.get("id"), str):
             created_ids.append(metadata["id"])
     plan = plan_documents(
         root,
-        documents,
+        created_documents,
         actor="agent:treewiki-bootstrap",
         created_ids=created_ids,
         reason="TreeWiki bootstrap",
@@ -84,7 +87,7 @@ def _existing_config_is_compatible(config_target: Path) -> bool:
             print(
                 "UPGRADE REQUIRED: existing .knowledge/config.yml "
                 f"uses config version {version}; bootstrap_treewiki.py will not "
-                "reinterpret it as the v4 memory layout. Run the approved v4 "
+                "reinterpret it as the v5 local-history layout. Run the approved v5 "
                 "upgrade, then run bootstrap again.",
                 file=sys.stderr,
             )
@@ -106,7 +109,7 @@ def _existing_config_is_compatible(config_target: Path) -> bool:
         )
     ):
         print(
-            "ERROR existing config version 4 does not declare the required "
+            "ERROR existing config version 5 does not declare the required "
             "memory.layout_version 2 private/shared layout; use the approved "
             "upgrade or repair workflow before bootstrapping.",
             file=sys.stderr,

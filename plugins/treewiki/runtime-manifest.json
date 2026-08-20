@@ -1,17 +1,23 @@
 {
-  "core_hash": "sha256:5934d43a29fbf34d9ce71d2feded6cb1e17674972187906305535d13fec5a20e",
+  "core_hash": "sha256:8c6987b0f73a1a618911f77165d7edfd09448a2d2cb6a27ea1f6d8669d5e68c8",
   "core_version": "0.2.1",
   "files": {
+    "authoring.py": "sha256:1a2e24dd99598e7e2d54ae6b80ffbb92dc7f35dc8d9105647b31c0c197cb05d0",
     "build_embedding_index.py": "sha256:bf1c00122b8d51c04755e8769fca7f93600f949397c103f03f5018c2c06f671b",
     "build_search_index.py": "sha256:75e08481995c39047868626ef56257fdd0b85036347421445ae3a4b9fe157e20",
     "claude_alias.py": "sha256:0c459cdded77d6e31f44a7261f8608d7cf417f7b628a918880196c085805e3ab",
-    "document_history.py": "sha256:69a71559a18894beb9d9d44c9795aa9361f266c5122be86ae386088061bc9b65",
-    "knowledge_cli.py": "sha256:2ae40816276e26141c3fa9133b0976184e7209e76c5942c5fb9dfd4b99bb0778",
-    "memory_policy.py": "sha256:d20aa3cde95d4762c16afd29aba7d6e26e4a0f82f194cf4b4b552d50713aa387",
+    "code_context.py": "sha256:1e6bc704d45cca1614bd11308f8904af2c9d2a8bee49eb84c0fe8599406d15f3",
+    "document_composition.py": "sha256:7d9869d9943380b21d43a367eaf70021a00f94381096c7d0c4de1f0407b20b3d",
+    "document_history.py": "sha256:7de2ea388322d8103b3bbb74ceb8c5a289ec81cce1bff599c0e1568fc49785f0",
+    "governance_report.py": "sha256:018b8b77596cb50d4858c69554e797c44c959e53f05827d477235cb40c7b328f",
+    "knowledge_cli.py": "sha256:f1bd0ce44ca9c4fe34689239f5d31c2476b7f767ca63908f2eea82e2ad6857d0",
+    "memory_policy.py": "sha256:cbae8f9e4cec3a344e5512a2d04abcd2ea13801de1935038d1aad5fdaa31c1a3",
     "okf_v02.py": "sha256:c5d1c7329d76d68cdfd9be37aa9fe5b3d36fc1367379c237a830fe47fef6ce44",
     "release_manifest.py": "sha256:1dc6c938f5569de7e37d0ff063ec5b4e31ab28e17d179ce269bd6ed0acaf0135",
-    "upgrade.py": "sha256:bab537891968040a33f58362ce7f7e3b72be8267d035d7ff60846aae07e5dab1",
-    "validate_knowledge.py": "sha256:30f400452f605d00ca78d9dac871ee93184bebd5f9df43f3d119cb0a6f3fff2b"
+    "retrieval_gaps.py": "sha256:308687c8a75855a6212de1bfac9287324d428576541077f6b45087fb0ddaa399",
+    "technical_writing.py": "sha256:583db976fcc99a72cfc0cc8af4d5202179c661533ceb13debf58e08ede4e430b",
+    "upgrade.py": "sha256:9350fb0c74e954d4e7c2bf9b15cbf94ab923619c3390c0fc2b7865ae4e9c5456",
+    "validate_knowledge.py": "sha256:4525107f0a4ed7df8807df61a2ca72fd9ec3aacc5782a5528aa48d74dc3cfeea"
   },
   "release_version": "0.2.1",
   "schema": "treewiki.adapter-runtime/v1"

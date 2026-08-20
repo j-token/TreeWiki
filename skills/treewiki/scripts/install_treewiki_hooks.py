@@ -28,7 +28,7 @@ LEGACY_MARKER = "lmwiki_hook.py"
 OWNED_MARKERS = (CANONICAL_MARKER, LEGACY_MARKER)
 SETTINGS_SCHEMA = "treewiki.hook-settings/v1"
 LEGACY_REMOVAL_RELEASE = "0.2.0"
-CONFIG_VERSION = 4
+CONFIG_VERSION = 5
 MEMORY_LAYOUT_VERSION = 2
 
 
@@ -259,7 +259,7 @@ def _authorized_repository(
         )
     memory = config.get("memory")
     if not isinstance(memory, dict):
-        raise ValueError("config v4 must contain a memory mapping")
+        raise ValueError("config v5 must contain a memory mapping")
     if memory.get("layout_version") != MEMORY_LAYOUT_VERSION:
         raise ValueError(
             "standalone hook transition requires memory.layout_version 2"

@@ -16,6 +16,7 @@ import yaml
 
 
 HISTORY_SCHEMA = "treewiki.document-history/v1"
+HISTORY_DIRECTORY = Path(".knowledge/document-history")
 PLAN_SCHEMA = "treewiki.document-finalize-plan/v1"
 VERIFY_PLAN_SCHEMA = "treewiki.document-verify-plan/v1"
 MOVE_PLAN_SCHEMA = "treewiki.document-move-plan/v1"
@@ -108,7 +109,9 @@ def render_document(metadata: Mapping[str, Any], body: str) -> str:
     frontmatter = yaml.safe_dump(
         _plain(dict(metadata)), allow_unicode=True, sort_keys=False
     ).rstrip()
-    return f"---\n{frontmatter}\n---\n\n{body.lstrip(chr(10))}"
+    normalized_body = body.lstrip("\n")
+    separator = "\n\n" if normalized_body else "\n"
+    return f"---\n{frontmatter}\n---{separator}{normalized_body}"
 
 
 def semantic_components(metadata: Mapping[str, Any], body: str) -> dict[str, str]:
@@ -128,10 +131,14 @@ def semantic_components(metadata: Mapping[str, Any], body: str) -> dict[str, str
     }
 
 
-def history_path_for(document: Path, document_id: str) -> Path:
+def history_ref_for(document_id: str) -> str:
     if not document_id or any(character in document_id for character in "\\/:*?\"<>|"):
         raise DocumentHistoryError("INVALID_DOCUMENT_ID", "document ID cannot name a sidecar")
-    return document.with_name(f"{document_id}.history.jsonl")
+    return (HISTORY_DIRECTORY / f"{document_id}.jsonl").as_posix()
+
+
+def history_path_for(root: Path, document_id: str) -> Path:
+    return root.resolve() / history_ref_for(document_id)
 
 
 def read_history(path: Path) -> list[dict[str, Any]]:
@@ -158,6 +165,65 @@ def read_history(path: Path) -> list[dict[str, Any]]:
         if event.get("event") not in EVENTS:
             raise DocumentHistoryError(
                 "INVALID_HISTORY", f"unknown event at {path.name}:{index}"
+            )
+        required = {
+            "document_id",
+            "at",
+            "actor",
+            "revision",
+            "semantic_hash",
+            "metadata_hash",
+            "body_hash",
+            "previous_hash",
+            "plan_id",
+            "reason",
+        }
+        if not required.issubset(event):
+            raise DocumentHistoryError(
+                "INVALID_HISTORY", f"incomplete history event at {path.name}:{index}"
+            )
+        for key in ("semantic_hash", "metadata_hash", "body_hash", "plan_id"):
+            value = event.get(key)
+            if (
+                not isinstance(value, str)
+                or len(value) != 71
+                or not value.startswith("sha256:")
+                or any(character not in "0123456789abcdef" for character in value[7:])
+            ):
+                raise DocumentHistoryError(
+                    "INVALID_HISTORY", f"invalid {key} at {path.name}:{index}"
+                )
+        revision = event.get("revision")
+        if not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
+            raise DocumentHistoryError(
+                "INVALID_HISTORY", f"invalid revision at {path.name}:{index}"
+            )
+        if events:
+            previous = events[-1]
+            if event.get("document_id") != previous.get("document_id"):
+                raise DocumentHistoryError(
+                    "INVALID_HISTORY", f"document ID changed at {path.name}:{index}"
+                )
+            if event.get("previous_hash") != previous.get("semantic_hash"):
+                raise DocumentHistoryError(
+                    "INVALID_HISTORY", f"broken semantic hash chain at {path.name}:{index}"
+                )
+            expected_revision = (
+                previous["revision"]
+                if event.get("event") == "verified"
+                else previous["revision"] + 1
+            )
+            if revision != expected_revision:
+                raise DocumentHistoryError(
+                    "INVALID_HISTORY", f"invalid revision order at {path.name}:{index}"
+                )
+            if event.get("event") == "verified" and event.get("semantic_hash") != previous.get("semantic_hash"):
+                raise DocumentHistoryError(
+                    "INVALID_HISTORY", f"verification changed semantics at {path.name}:{index}"
+                )
+        elif event.get("previous_hash") is not None:
+            raise DocumentHistoryError(
+                "INVALID_HISTORY", f"first event has a previous hash at {path.name}:{index}"
             )
         events.append(event)
     return events
@@ -271,7 +337,36 @@ def _backfilled_history(
     now: str,
     created: bool,
     current_status: str | None,
+    lifecycle: Mapping[str, Any],
 ) -> tuple[list[dict[str, Any]], int, str | None, str | None]:
+    shared_revision = lifecycle.get("revision")
+    if (
+        not created
+        and isinstance(shared_revision, int)
+        and not isinstance(shared_revision, bool)
+        and shared_revision > 0
+    ):
+        events = [
+            _event(
+                seq=1,
+                event="migrated",
+                document_id=document_id,
+                at=now,
+                actor=actor,
+                revision=shared_revision,
+                components=current_components,
+                previous_hash=None,
+                plan_id=None,
+                reason="local history initialized from shared lifecycle summary",
+                status=current_status,
+            )
+        ]
+        return (
+            events,
+            shared_revision,
+            lifecycle.get("created_at"),
+            lifecycle.get("modified_at"),
+        )
     snapshots = _git_snapshots(root, document)
     events: list[dict[str, Any]] = []
     previous: str | None = None
@@ -383,8 +478,16 @@ def plan_documents(
         document_id = metadata.get("id")
         if not isinstance(document_id, str) or not document_id:
             raise DocumentHistoryError("INVALID_DOCUMENT_ID", f"document has no stable ID: {relative}")
-        sidecar = history_path_for(supplied, document_id)
-        history = read_history(sidecar)
+        sidecar = history_path_for(root, document_id)
+        legacy_sidecar = supplied.with_name(f"{document_id}.history.jsonl")
+        if sidecar.exists() and legacy_sidecar.exists():
+            raise DocumentHistoryError(
+                "HISTORY_CONFLICT",
+                f"both local and legacy history exist for {document_id}",
+            )
+        history_source = sidecar if sidecar.exists() else legacy_sidecar
+        history = read_history(history_source)
+        had_history = bool(history)
         components = semantic_components(metadata, body)
         changed = False
         new_events: list[dict[str, Any]] = []
@@ -400,12 +503,13 @@ def plan_documents(
                 current_status=(
                     str(metadata["status"]) if metadata.get("status") is not None else None
                 ),
+                lifecycle=metadata,
             )
             metadata["created_at"] = created_at
             metadata["modified_at"] = modified_at
             metadata.setdefault("verified_at", None)
             metadata["revision"] = revision
-            metadata["history_ref"] = f"./{sidecar.name}"
+            metadata["history_ref"] = history_ref_for(document_id)
             new_events = history
             changed = True
         else:
@@ -447,7 +551,7 @@ def plan_documents(
                 "modified_at": metadata.get("modified_at"),
                 "verified_at": metadata.get("verified_at"),
                 "revision": revision,
-                "history_ref": f"./{sidecar.name}",
+                "history_ref": history_ref_for(document_id),
             }
             for key, value in lifecycle.items():
                 if metadata.get(key) != value or key not in metadata:
@@ -455,7 +559,12 @@ def plan_documents(
                     changed = True
         rendered = render_document(metadata, body)
         history_text = render_history(history)
-        if rendered == original and sidecar.exists() and history_text == sidecar.read_text(encoding="utf-8"):
+        if (
+            rendered == original
+            and sidecar.exists()
+            and not legacy_sidecar.exists()
+            and history_text == sidecar.read_text(encoding="utf-8")
+        ):
             changed = False
         if changed:
             internal_actions.append(
@@ -467,6 +576,16 @@ def plan_documents(
                     "history_before_sha256": (
                         bytes_digest(sidecar.read_bytes()) if sidecar.exists() else "missing"
                     ),
+                    "legacy_history_path": (
+                        legacy_sidecar.relative_to(root).as_posix()
+                        if legacy_sidecar.exists() and legacy_sidecar != sidecar
+                        else None
+                    ),
+                    "legacy_history_sha256": (
+                        bytes_digest(legacy_sidecar.read_bytes())
+                        if legacy_sidecar.exists() and legacy_sidecar != sidecar
+                        else None
+                    ),
                     "target_sha256": bytes_digest(rendered.encode("utf-8")),
                     "history_target_sha256": bytes_digest(history_text.encode("utf-8")),
                     "rendered": rendered,
@@ -474,7 +593,7 @@ def plan_documents(
                     "new_events": new_events,
                     "candidate_created": bool(
                         document_id in created
-                        and not read_history(sidecar)
+                        and not had_history
                         and metadata.get("status") == "proposed"
                         and isinstance(metadata.get("memory"), Mapping)
                         and metadata["memory"].get("level") == "l3"
@@ -517,6 +636,8 @@ def plan_documents(
                 "history_path",
                 "before_sha256",
                 "history_before_sha256",
+                "legacy_history_path",
+                "legacy_history_sha256",
                 "target_sha256",
                 "candidate_created",
                 "category",
@@ -532,7 +653,12 @@ def plan_documents(
     for action in internal_actions:
         for event in action["new_events"]:
             event["plan_id"] = plan_id
-        existing = read_history(root / action["history_path"])
+        existing_path = (
+            root / action["legacy_history_path"]
+            if action.get("legacy_history_path")
+            else root / action["history_path"]
+        )
+        existing = read_history(existing_path)
         action["history_text"] = render_history([*existing, *action["new_events"]])
         action["history_target_sha256"] = bytes_digest(action["history_text"].encode("utf-8"))
     return {
@@ -571,6 +697,15 @@ def apply_document_plan(root: Path, plan: Mapping[str, Any], *, plan_id: str) ->
             observed_history = bytes_digest(sidecar.read_bytes()) if sidecar.exists() else "missing"
             if observed_history != action["history_before_sha256"]:
                 raise DocumentHistoryError("STALE_PLAN", f"history changed: {action['history_path']}")
+            legacy = (
+                root / action["legacy_history_path"]
+                if action.get("legacy_history_path")
+                else None
+            )
+            if legacy is not None and bytes_digest(legacy.read_bytes()) != action["legacy_history_sha256"]:
+                raise DocumentHistoryError(
+                    "STALE_PLAN", f"legacy history changed: {action['legacy_history_path']}"
+                )
             document_backup = backup_root / action["path"]
             history_backup = backup_root / action["history_path"]
             document_backup.parent.mkdir(parents=True, exist_ok=True)
@@ -578,6 +713,10 @@ def apply_document_plan(root: Path, plan: Mapping[str, Any], *, plan_id: str) ->
             if sidecar.exists():
                 history_backup.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(sidecar, history_backup)
+            if legacy is not None:
+                legacy_backup = backup_root / action["legacy_history_path"]
+                legacy_backup.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(legacy, legacy_backup)
             attempted.append(action)
             event = {
                 "transaction_id": transaction_id,
@@ -623,6 +762,8 @@ def apply_document_plan(root: Path, plan: Mapping[str, Any], *, plan_id: str) ->
                 raise DocumentHistoryError("VERIFY_FAILED", f"document verification failed: {action['path']}")
             if bytes_digest(sidecar.read_bytes()) != action["history_target_sha256"]:
                 raise DocumentHistoryError("VERIFY_FAILED", f"history verification failed: {action['history_path']}")
+            if legacy is not None:
+                legacy.unlink()
             with journal.open("a", encoding="utf-8", newline="\n") as handle:
                 handle.write(json.dumps({**event, "state": "verified"}, ensure_ascii=False, sort_keys=True) + "\n")
                 handle.flush()
@@ -633,12 +774,22 @@ def apply_document_plan(root: Path, plan: Mapping[str, Any], *, plan_id: str) ->
             sidecar = root / action["history_path"]
             document_backup = backup_root / action["path"]
             history_backup = backup_root / action["history_path"]
+            legacy = (
+                root / action["legacy_history_path"]
+                if action.get("legacy_history_path")
+                else None
+            )
             if document_backup.exists():
                 shutil.copy2(document_backup, document)
             if history_backup.exists():
                 shutil.copy2(history_backup, sidecar)
             else:
                 sidecar.unlink(missing_ok=True)
+            if legacy is not None:
+                legacy_backup = backup_root / action["legacy_history_path"]
+                if legacy_backup.exists():
+                    legacy.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(legacy_backup, legacy)
         raise
     notices = [
         {
@@ -676,7 +827,7 @@ def plan_verification(
     document_id = metadata.get("id")
     if not isinstance(document_id, str) or not document_id:
         raise DocumentHistoryError("INVALID_DOCUMENT_ID", "document has no stable ID")
-    sidecar = history_path_for(document, document_id)
+    sidecar = history_path_for(root, document_id)
     now = at or _stable_observed_at([document, sidecar])
     history = read_history(sidecar)
     if not history:
@@ -685,7 +836,7 @@ def plan_verification(
     revision = int(history[-1]["revision"])
     metadata["verified_at"] = now
     metadata["revision"] = revision
-    metadata["history_ref"] = f"./{sidecar.name}"
+    metadata["history_ref"] = history_ref_for(document_id)
     event = _event(
         seq=len(history) + 1,
         event="verified",
@@ -766,21 +917,19 @@ def plan_document_move(root: Path, document: Path, destination: Path) -> dict[st
     document_id = metadata.get("id")
     if not isinstance(document_id, str) or not document_id:
         raise DocumentHistoryError("INVALID_DOCUMENT_ID", "document has no stable ID")
-    source_history = history_path_for(source, document_id)
-    target_history = history_path_for(target, document_id)
-    if not source_history.is_file():
+    history = history_path_for(root, document_id)
+    if not history.is_file():
         raise DocumentHistoryError("HISTORY_REQUIRED", "finalize the document before moving it")
-    if target.exists() or target_history.exists():
-        raise DocumentHistoryError("TARGET_EXISTS", "document or history destination already exists")
+    if target.exists():
+        raise DocumentHistoryError("TARGET_EXISTS", "document destination already exists")
     public = {
         "schema": MOVE_PLAN_SCHEMA,
         "document_id": document_id,
         "source": source_relative,
-        "source_history": source_history.relative_to(root).as_posix(),
         "target": target_relative,
-        "target_history": target_history.relative_to(root).as_posix(),
+        "history_path": history.relative_to(root).as_posix(),
         "document_sha256": bytes_digest(source.read_bytes()),
-        "history_sha256": bytes_digest(source_history.read_bytes()),
+        "history_sha256": bytes_digest(history.read_bytes()),
     }
     return {**public, "status": "planned", "plan_id": canonical_digest(public)}
 
@@ -790,44 +939,37 @@ def apply_document_move(root: Path, plan: Mapping[str, Any], *, plan_id: str) ->
         raise DocumentHistoryError("STALE_PLAN", "document move plan ID changed")
     root = root.resolve(strict=True)
     source = root / str(plan["source"])
-    source_history = root / str(plan["source_history"])
+    history = root / str(plan["history_path"])
     target = root / str(plan["target"])
-    target_history = root / str(plan["target_history"])
     if bytes_digest(source.read_bytes()) != plan.get("document_sha256"):
         raise DocumentHistoryError("STALE_PLAN", "document changed before move")
-    if bytes_digest(source_history.read_bytes()) != plan.get("history_sha256"):
+    if bytes_digest(history.read_bytes()) != plan.get("history_sha256"):
         raise DocumentHistoryError("STALE_PLAN", "document history changed before move")
-    if target.exists() or target_history.exists():
-        raise DocumentHistoryError("TARGET_EXISTS", "document or history destination already exists")
+    if target.exists():
+        raise DocumentHistoryError("TARGET_EXISTS", "document destination already exists")
     transaction_id = "document-move-" + uuid.uuid4().hex
     backup_root = root / ".knowledge" / "document-backups" / transaction_id
     backup_root.mkdir(parents=True, exist_ok=False)
     document_backup = backup_root / str(plan["source"])
-    history_backup = backup_root / str(plan["source_history"])
+    history_backup = backup_root / str(plan["history_path"])
     document_backup.parent.mkdir(parents=True, exist_ok=True)
     history_backup.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(source, document_backup)
-    shutil.copy2(source_history, history_backup)
+    shutil.copy2(history, history_backup)
     target.parent.mkdir(parents=True, exist_ok=True)
-    target_history.parent.mkdir(parents=True, exist_ok=True)
     moved_document = False
-    moved_history = False
     try:
         os.replace(source, target)
         moved_document = True
-        os.replace(source_history, target_history)
-        moved_history = True
         if bytes_digest(target.read_bytes()) != plan.get("document_sha256"):
             raise DocumentHistoryError("VERIFY_FAILED", "moved document verification failed")
-        if bytes_digest(target_history.read_bytes()) != plan.get("history_sha256"):
-            raise DocumentHistoryError("VERIFY_FAILED", "moved history verification failed")
+        if bytes_digest(history.read_bytes()) != plan.get("history_sha256"):
+            raise DocumentHistoryError("VERIFY_FAILED", "document history verification failed")
     except Exception:
         if moved_document:
             target.unlink(missing_ok=True)
-        if moved_history:
-            target_history.unlink(missing_ok=True)
         shutil.copy2(document_backup, source)
-        shutil.copy2(history_backup, source_history)
+        shutil.copy2(history_backup, history)
         raise
     return {
         "schema": "treewiki.document-move-result/v1",
@@ -836,6 +978,6 @@ def apply_document_move(root: Path, plan: Mapping[str, Any], *, plan_id: str) ->
         "transaction_id": transaction_id,
         "document_id": plan["document_id"],
         "target": plan["target"],
-        "target_history": plan["target_history"],
+        "history_path": plan["history_path"],
         "backup_path": backup_root.as_posix(),
     }

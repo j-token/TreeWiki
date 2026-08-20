@@ -20,9 +20,21 @@ from typing import Any, Callable, Iterable, Mapping, Sequence, TypedDict
 import yaml
 
 try:
-    from document_history import history_path_for, read_history, semantic_components
+    from document_history import (
+        history_path_for,
+        history_ref_for,
+        parse_document_text,
+        read_history,
+        semantic_components,
+    )
 except ImportError:  # pragma: no cover - package-style import
-    from .document_history import history_path_for, read_history, semantic_components
+    from .document_history import (
+        history_path_for,
+        history_ref_for,
+        parse_document_text,
+        read_history,
+        semantic_components,
+    )
 
 try:
     from install_treewiki_hooks import (
@@ -76,7 +88,7 @@ except ImportError:  # pragma: no cover - package-style import
 
 
 STATUS_SCHEMA = "treewiki.upgrade-status/v1"
-TARGET_CONFIG_VERSION = 4
+TARGET_CONFIG_VERSION = 5
 MEMORY_LAYOUT_VERSION = 2
 STAGE_ORDER = (
     "memory-layout",
@@ -111,6 +123,7 @@ CONFIG_EXCLUDES = (
     "skills/**/assets/AGENTS.md",
     ".knowledge/upgrade-backups/**",
     ".knowledge/document-backups/**",
+    ".knowledge/document-history/**",
 )
 PRIVATE_L0_PATTERN = ".knowledge/private-memory/l0/**/*.md"
 INDEX_SCHEMA_VERSION = "1"
@@ -296,8 +309,8 @@ def _read_yaml_mapping(path: Path) -> dict[str, Any]:
     return copy.deepcopy(dict(loaded))
 
 
-def migrate_config_v4(config: Mapping[str, Any]) -> dict[str, Any]:
-    """Return the deterministic v4 target while preserving unknown keys."""
+def migrate_config_v5(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Return the deterministic v5 target while preserving unknown keys."""
     target = copy.deepcopy(dict(config))
     raw_version = target.get("version")
     if not isinstance(raw_version, int) or isinstance(raw_version, bool) or raw_version < 1:
@@ -374,17 +387,25 @@ def migrate_config_v4(config: Mapping[str, Any]) -> dict[str, Any]:
     for rule in CONFIG_EXCLUDES:
         if rule not in excludes:
             excludes.append(rule)
-    # Existing repositories become strict after document-finalize has backfilled
-    # every managed document. Keeping enforcement false here avoids inventing
-    # lifecycle dates during the config-only phase.
-    target["history"] = {"schema": 1, "sidecar": "stable-id", "enforce": False}
+    target["history"] = {
+        "schema": 1,
+        "storage": "local",
+        "path": ".knowledge/document-history",
+        "enforce": True,
+    }
     return target
 
 
-def migrate_config_v3(config: Mapping[str, Any]) -> dict[str, Any]:
-    """Deprecated 0.1 import name for the v4 migration."""
+def migrate_config_v4(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Deprecated import name for the current config migration."""
 
-    return migrate_config_v4(config)
+    return migrate_config_v5(config)
+
+
+def migrate_config_v3(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Deprecated 0.1 import name for the current config migration."""
+
+    return migrate_config_v5(config)
 
 
 def _document_id(path: Path) -> str:
@@ -822,7 +843,7 @@ def _json_bytes(value: Mapping[str, Any]) -> bytes:
     return (json.dumps(dict(value), ensure_ascii=False, indent=2) + "\n").encode("utf-8")
 
 
-def _ensure_ignore_bytes(path: Path, required_line: str) -> bytes:
+def _ensure_ignore_bytes(path: Path, required_lines: str | Sequence[str]) -> bytes:
     if path.is_file():
         try:
             text = path.read_text(encoding="utf-8")
@@ -834,11 +855,14 @@ def _ensure_ignore_bytes(path: Path, required_line: str) -> bytes:
             ) from exc
     else:
         text = ""
+    required = [required_lines] if isinstance(required_lines, str) else list(required_lines)
     lines = text.splitlines()
-    if required_line not in lines:
-        if text and not text.endswith(("\n", "\r")):
-            text += "\n"
-        text += required_line + "\n"
+    for required_line in required:
+        if required_line not in lines:
+            if text and not text.endswith(("\n", "\r")):
+                text += "\n"
+            text += required_line + "\n"
+            lines.append(required_line)
     return text.encode("utf-8")
 
 
@@ -848,7 +872,7 @@ def _upgrade_ignore_actions(repository: Path, stage: str) -> list[dict[str, Any]
         (
             "ensure_upgrade_backup_ignore",
             repository / ".knowledge" / ".gitignore",
-            "/upgrade-backups/",
+            ("/upgrade-backups/", "/document-history/"),
         ),
         (
             "ensure_repository_skill_backup_ignore",
@@ -1398,6 +1422,14 @@ def _plan_memory_layout(
     return normalized_plan, public_actions
 
 
+def _adapter_repository_root(root: Path, executing_root: Path) -> Path:
+    """Prefer repository-owned adapter sources over an installed skill's parent."""
+
+    if (root / "plugins" / "treewiki" / "plugin.json").is_file():
+        return root
+    return executing_root.parents[1]
+
+
 def diagnose_upgrade(
     repository: str | Path,
     *,
@@ -1495,7 +1527,7 @@ def diagnose_upgrade(
                     )
                 )
             else:
-                target_config = migrate_config_v4(config)
+                target_config = migrate_config_v5(config)
                 config_changed = target_config != config
                 components.append(
                     _component(
@@ -1511,7 +1543,7 @@ def diagnose_upgrade(
                     target_bytes = _yaml_bytes(target_config)
                     actions.append(
                         {
-                            "id": "migrate_repository_config_v4",
+                            "id": "migrate_repository_config_v5",
                             "stage": "config",
                             "kind": "atomic_replace",
                             "target": config_path.as_posix(),
@@ -1735,19 +1767,23 @@ def diagnose_upgrade(
                     if not text.startswith("---"):
                         missing_history.append(document.relative_to(root).as_posix())
                         continue
-                    parts = text.split("---", 2)
-                    metadata = yaml.safe_load(parts[1]) if len(parts) == 3 else None
+                    metadata, body = parse_document_text(text)
                     if not isinstance(metadata, Mapping) or not isinstance(metadata.get("id"), str):
                         missing_history.append(document.relative_to(root).as_posix())
                         continue
-                    body = parts[2].lstrip("\r\n")
-                    sidecar = history_path_for(document, str(metadata["id"]))
+                    document_id = str(metadata["id"])
+                    sidecar = history_path_for(root, document_id)
+                    legacy_sidecar = document.with_name(f"{document_id}.history.jsonl")
                     events = read_history(sidecar)
                     required = {"created_at", "modified_at", "verified_at", "revision", "history_ref"}
-                    if not required.issubset(metadata) or not events:
+                    if (
+                        not required.issubset(metadata)
+                        or metadata.get("history_ref") != history_ref_for(document_id)
+                        or legacy_sidecar.exists()
+                    ):
                         missing_history.append(document.relative_to(root).as_posix())
                         continue
-                    if events[-1].get("semantic_hash") != semantic_components(metadata, body)["semantic_hash"]:
+                    if events and events[-1].get("semantic_hash") != semantic_components(metadata, body)["semantic_hash"]:
                         missing_history.append(document.relative_to(root).as_posix())
                 except (OSError, UnicodeError, ValueError, yaml.YAMLError):
                     missing_history.append(document.relative_to(root).as_posix())
@@ -1767,7 +1803,7 @@ def diagnose_upgrade(
             "Run manage document-finalize as a dry-run, then apply its exact plan ID to backfill document-history."
         )
 
-    repository_root = executing_root.parents[1]
+    repository_root = _adapter_repository_root(root, executing_root)
     release_runtime = embedded.to_dict().get("runtime")
     expected_core_hash = (
         release_runtime.get("core_hash") if isinstance(release_runtime, Mapping) else None
@@ -1996,7 +2032,7 @@ def diagnose_upgrade(
     effective_index_config = (
         target_config
         if target_config is not None
-        and any(action.get("id") == "migrate_repository_config_v4" for action in actions)
+        and any(action.get("id") == "migrate_repository_config_v5" for action in actions)
         else config
     )
     retrieval = (
@@ -2518,7 +2554,7 @@ def _intended_backup_path(
 ) -> str:
     action_id = str(action["id"])
     target = Path(str(action["target"]))
-    if action_id == "migrate_repository_config_v4":
+    if action_id == "migrate_repository_config_v5":
         return (backup_root / "config.yml").as_posix()
     if action_id in {"copy_repository_treewiki_skill", "copy_global_treewiki_skill"}:
         return (target.parent / ".treewiki-backups" / transaction_id / action_id).as_posix()
@@ -2872,7 +2908,7 @@ def apply_upgrade(
                                 f"shared memory target verification failed for {memory_id}",
                                 component="memory_layout",
                             )
-                    elif action["id"] == "migrate_repository_config_v4":
+                    elif action["id"] == "migrate_repository_config_v5":
                         target = Path(str(action["target"]))
                         if _hash_file_or_missing(target) != action["observed_sha256"]:
                             raise UpgradeException(
@@ -2880,7 +2916,7 @@ def apply_upgrade(
                                 "config changed after plan validation",
                             )
                         current = _read_yaml_mapping(target)
-                        target_config = migrate_config_v4(current)
+                        target_config = migrate_config_v5(current)
                         target_bytes = _yaml_bytes(target_config)
                         if _sha256_bytes(target_bytes) != action["target_sha256"]:
                             raise UpgradeException(
@@ -3152,7 +3188,7 @@ def apply_upgrade(
                     ],
                     relation_mapping=relation_mapping,
                 )
-                if "migrate_repository_config_v4" in completed:
+                if "migrate_repository_config_v5" in completed:
                     verification_action_id = "repository_validation"
                     _validate_repository_after_config(root)
                 verification_action_id = "upgrade_rediagnosis"

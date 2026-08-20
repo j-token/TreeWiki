@@ -15,7 +15,7 @@ created_at: YYYY-MM-DDT00:00:00Z
 modified_at: YYYY-MM-DDT00:00:00Z
 verified_at: null
 revision: 1
-history_ref: ./MEMORY-L2-SCOPE-001.history.jsonl
+history_ref: .knowledge/document-history/MEMORY-L2-SCOPE-001.jsonl
 memory:
   level: l2
   subject: team:repository

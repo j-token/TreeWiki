@@ -33,7 +33,7 @@ class SharedMemoryValidationTests(unittest.TestCase):
         )
         (vocabulary / "glossary.yml").write_text("terms: []\n", encoding="utf-8")
         self.config = {
-            "version": 4,
+            "version": 5,
             "documents": {
                 "include": ["docs/**/*.md", ".knowledge/private-memory/l0/**/*.md"],
                 "exclude": [],
@@ -51,7 +51,12 @@ class SharedMemoryValidationTests(unittest.TestCase):
                     "persona_path": "docs/memory/l3/persona",
                 },
             },
-            "history": {"schema": 1, "sidecar": "stable-id"},
+            "history": {
+                "schema": 1,
+                "storage": "local",
+                "path": ".knowledge/document-history",
+                "enforce": True,
+            },
             "hooks": {"enabled": False, "l3": {"minimum_sources": 2}},
             "access_control": {
                 "default_owner": "user:owner",
@@ -95,6 +100,11 @@ class SharedMemoryValidationTests(unittest.TestCase):
             "summary": "공유 기억 검증 fixture다.",
             "relations": [],
             "reviewed": "2026-08-08",
+            "created_at": "2026-08-08T00:00:00Z",
+            "modified_at": "2026-08-08T00:00:00Z",
+            "verified_at": None,
+            "revision": 1,
+            "history_ref": f".knowledge/document-history/{doc_id}.jsonl",
             "memory": {
                 "level": level,
                 "subject": "user:owner",
@@ -187,7 +197,7 @@ class SharedMemoryValidationTests(unittest.TestCase):
         result = self.validate()
         self.assertIn("evidence_digest is stale", result.stdout)
 
-    def test_config_v4_rejects_private_l1_and_broad_private_glob(self) -> None:
+    def test_config_v5_rejects_private_l1_and_broad_private_glob(self) -> None:
         self.config["documents"]["include"].append(".knowledge/private-memory/**/*.md")
         self.write_config()
         metadata = self.metadata("MEMORY-L1-PRIVATE-001")

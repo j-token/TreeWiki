@@ -20,7 +20,7 @@ from typing import Any, Iterable, Mapping, Sequence
 import yaml
 
 
-CURRENT_CONFIG_VERSION = 4
+CURRENT_CONFIG_VERSION = 5
 MEMORY_LAYOUT_VERSION = 2
 PRIVATE_MEMORY_PATH = ".knowledge/private-memory"
 SHARED_MEMORY_PATH = "docs/memory"
@@ -99,8 +99,16 @@ def validate_config_v3(config: Mapping[str, Any]) -> list[str]:
     if l3.get("persona_path") != "docs/memory/l3/persona":
         errors.append("memory.l3.persona_path must be docs/memory/l3/persona")
     history = config.get("history") if isinstance(config.get("history"), Mapping) else {}
-    if history.get("schema") != 1 or history.get("sidecar") != "stable-id":
-        errors.append("history must declare schema: 1 and sidecar: stable-id")
+    if (
+        history.get("schema") != 1
+        or history.get("storage") != "local"
+        or history.get("path") != ".knowledge/document-history"
+        or history.get("enforce") is not True
+    ):
+        errors.append(
+            "history must declare schema: 1, storage: local, "
+            "path: .knowledge/document-history, and enforce: true"
+        )
     try:
         private_path, shared_path = _memory_paths(config)
     except MemoryPolicyError as exc:

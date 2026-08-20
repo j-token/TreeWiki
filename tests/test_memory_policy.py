@@ -20,9 +20,9 @@ ZERO_HASH = "sha256:" + "0" * 64
 
 
 def config_v3() -> dict:
-    """Current v4 fixture; legacy function name keeps older test call sites compact."""
+    """Current v5 fixture; legacy function name keeps older test call sites compact."""
     return {
-        "version": 4,
+        "version": 5,
         "documents": {
             "include": [
                 "AGENTS.md",
@@ -40,7 +40,12 @@ def config_v3() -> dict:
                 "persona_path": "docs/memory/l3/persona",
             },
         },
-        "history": {"schema": 1, "sidecar": "stable-id"},
+        "history": {
+            "schema": 1,
+            "storage": "local",
+            "path": ".knowledge/document-history",
+            "enforce": True,
+        },
     }
 
 
@@ -99,15 +104,15 @@ def record(
 
 
 class ConfigAndMutationTests(unittest.TestCase):
-    def test_config_v4_is_required_for_writes(self) -> None:
+    def test_config_v5_is_required_for_writes(self) -> None:
         memory_policy.require_config_v3(config_v3())
         old = config_v3()
         old["version"] = 3
-        with self.assertRaisesRegex(memory_policy.MemoryPolicyError, "version must be 4") as caught:
+        with self.assertRaisesRegex(memory_policy.MemoryPolicyError, "version must be 5") as caught:
             memory_policy.require_config_v3(old)
         self.assertEqual(caught.exception.code, "CONFIG_UPGRADE_REQUIRED")
         newer = config_v3()
-        newer["version"] = 5
+        newer["version"] = 6
         with self.assertRaises(memory_policy.MemoryPolicyError) as caught:
             memory_policy.require_config_v3(newer)
         self.assertEqual(caught.exception.code, "INCOMPATIBLE_NEWER")

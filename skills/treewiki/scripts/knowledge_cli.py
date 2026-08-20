@@ -18,6 +18,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8")
+
 try:
     import yaml
 except ModuleNotFoundError:
@@ -62,12 +66,19 @@ from document_history import (
     apply_document_plan,
     apply_verification,
     history_path_for,
+    history_ref_for,
     plan_documents,
     plan_document_move,
     plan_verification,
     read_history,
 )
 from okf_v02 import export_concept
+from authoring import apply_new_document, plan_new_document
+from code_context import apply_context_plan, build_context_plan
+from document_composition import composition_limits
+from governance_report import build_governance_report
+from retrieval_gaps import append_gap, folded_report, ledger_path, plan_gap, read_events
+from technical_writing import TECHNICAL_DOCUMENT_TYPES, template_body
 
 
 TOKEN_RE = re.compile(r"[\w가-힣-]+", re.UNICODE)
@@ -518,6 +529,43 @@ def query_preferences(args: argparse.Namespace) -> int:
     return 0
 
 
+def query_gap_report(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve()
+    config = repository_config(root)
+    identity_subjects(args)
+    events = read_events(ledger_path(root, config))
+    principal = None if args.all and args.principal in set(
+        (config.get("access_control") or {}).get("managers", [])
+    ) else args.principal
+    if args.all and principal is not None:
+        raise ValueError("--all retrieval gaps requires a repository manager")
+    report = folded_report(events, principal=principal)
+    if args.status:
+        report = [item for item in report if item.get("status") == args.status]
+    if args.json:
+        print(json.dumps({"schema": "treewiki.retrieval-gap-report/v1", "gaps": report}, ensure_ascii=False, indent=2))
+    else:
+        for item in report:
+            print(f"{item.get('gap_id')}\t{item.get('status')}\t{item.get('reason')}\t{item.get('query')}")
+    return 0
+
+
+def query_governance_report(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve()
+    config = repository_config(root)
+    records = allowed_records(load_records(root, config), config, identity_subjects(args), include_inactive=True)
+    documents = config.get("documents") if isinstance(config.get("documents"), dict) else {}
+    composition, _ = composition_limits(documents)
+    report = build_governance_report(root, records, composition=composition)
+    if args.json:
+        print(json.dumps(report, ensure_ascii=False, indent=2))
+    else:
+        for item in report["findings"]:
+            print(f"{item.get('kind')}\t{item.get('id')}\t{item.get('path')}")
+        print(f"Governance report: {report['document_count']} documents, {report['finding_count']} findings")
+    return 0
+
+
 def distilled_parent_ids(metadata: dict[str, Any]) -> list[str]:
     relations = metadata.get("relations", [])
     if not isinstance(relations, list):
@@ -601,7 +649,7 @@ def query_history(args: argparse.Namespace) -> int:
     config = repository_config(root)
     record = _readable_record_by_id(root, config, args, args.document_id)
     document = root / record["path"]
-    sidecar = history_path_for(document, args.document_id)
+    sidecar = history_path_for(root, args.document_id)
     events = read_history(sidecar)
     payload = {
         "schema": "treewiki.document-history-query/v1",
@@ -626,7 +674,7 @@ def query_okf_export(args: argparse.Namespace) -> int:
     config = repository_config(root)
     record = _readable_record_by_id(root, config, args, args.document_id)
     document = root / record["path"]
-    history = read_history(history_path_for(document, args.document_id))
+    history = read_history(history_path_for(root, args.document_id))
     concept = export_concept(record["metadata"], record["body"], history)
     payload = {
         "schema": "treewiki.okf-export/v1",
@@ -865,7 +913,7 @@ def _l3_review_context(
         owner = access.get("owner", defaults.get("default_owner"))
         authorized = args.principal == owner
     elif scope in {"team", "repo", "global"}:
-        managers = defaults.get("managers", [defaults.get("default_owner")])
+        managers = _committee_policy(metadata, config)["managers"]
         authorized = isinstance(managers, list) and any(value in subjects for value in managers)
     else:
         raise UpgradeException(
@@ -906,6 +954,31 @@ def _l3_review_context(
     return record, by_id, digest, eligibility
 
 
+def _committee_policy(metadata: dict[str, Any], config: dict[str, Any]) -> dict[str, Any]:
+    governance = config.get("governance") if isinstance(config.get("governance"), dict) else {}
+    document_governance = metadata.get("governance") if isinstance(metadata.get("governance"), dict) else {}
+    memory = metadata.get("memory") if isinstance(metadata.get("memory"), dict) else {}
+    scope = document_governance.get("scope")
+    if scope is None:
+        scope = "standards" if memory.get("scope") == "global" else "domain"
+    if scope == "standards":
+        committee = governance.get("standards_committee") if isinstance(governance.get("standards_committee"), dict) else {}
+        name = "standards"
+    else:
+        domains = governance.get("domain_committees") if isinstance(governance.get("domain_committees"), dict) else {}
+        domain = str(document_governance.get("domain") or memory.get("domain") or "repository")
+        committee = domains.get(domain) if isinstance(domains.get(domain), dict) else domains.get("repository", {})
+        name = f"domain:{domain}"
+    access = config.get("access_control") if isinstance(config.get("access_control"), dict) else {}
+    managers = committee.get("managers") if isinstance(committee, dict) else None
+    if not isinstance(managers, list) or not managers:
+        managers = access.get("managers", [access.get("default_owner", "user:owner")])
+    quorum = committee.get("quorum", 1) if isinstance(committee, dict) else 1
+    if not isinstance(quorum, int) or isinstance(quorum, bool) or quorum < 1:
+        quorum = 1
+    return {"name": name, "managers": sorted(str(item) for item in managers), "quorum": quorum}
+
+
 def manage_l3_review(args: argparse.Namespace) -> int:
     if not re.fullmatch(r"sha256:[0-9a-f]{64}", args.candidate_digest):
         raise UpgradeException(
@@ -917,7 +990,16 @@ def manage_l3_review(args: argparse.Namespace) -> int:
     config = repository_config(root)
     _require_memory_config_v3(config, "l3-review")
     record, by_id, digest, eligibility = _l3_review_context(root, config, args)
-    transition = "active" if args.decision in {"approve", "activate", "supersede"} else "rejected"
+    committee = _committee_policy(record["metadata"], config)
+    sharing = record["metadata"].get("sharing") if isinstance(record["metadata"].get("sharing"), dict) else {}
+    prior_votes = {str(value) for value in sharing.get("approval_votes", []) if isinstance(value, str)}
+    proposed_votes = sorted(prior_votes | {args.principal}) if args.decision in {"approve", "activate", "supersede"} else sorted(prior_votes)
+    quorum_met = len(proposed_votes) >= int(committee["quorum"])
+    transition = (
+        "active" if args.decision in {"approve", "activate", "supersede"} and quorum_met
+        else "proposed" if args.decision in {"approve", "activate", "supersede"}
+        else "rejected"
+    )
     result: dict[str, Any] = {
         "schema": "treewiki.l3-review/v1",
         "status": "planned",
@@ -926,6 +1008,11 @@ def manage_l3_review(args: argparse.Namespace) -> int:
         "candidate_digest": digest,
         "actor": args.principal,
         "transition": {"from": "proposed", "to": transition},
+        "committee": committee["name"],
+        "required_approvers": committee["managers"],
+        "quorum": committee["quorum"],
+        "collected_approvers": proposed_votes,
+        "quorum_met": quorum_met,
         "apply": False,
     }
     if eligibility is not None:
@@ -942,6 +1029,9 @@ def manage_l3_review(args: argparse.Namespace) -> int:
             "transition": result["transition"],
             "evidence_ids": result.get("evidence_ids", []),
             "supersedes_ids": result.get("supersedes_ids", []),
+            "committee": result["committee"],
+            "quorum": result["quorum"],
+            "collected_approvers": result["collected_approvers"],
         }
     )
     if not args.apply:
@@ -963,7 +1053,7 @@ def manage_l3_review(args: argparse.Namespace) -> int:
     approved_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     metadata = record["metadata"]
     try:
-        if args.decision in {"approve", "activate", "supersede"}:
+        if args.decision in {"approve", "activate", "supersede"} and quorum_met:
             updated = approve_l3(
                 metadata,
                 approver=args.principal,
@@ -971,6 +1061,22 @@ def manage_l3_review(args: argparse.Namespace) -> int:
                 config=config,
                 by_id=by_id,
             )
+            updated_sharing = updated.get("sharing") if isinstance(updated.get("sharing"), dict) else {}
+            updated["sharing"] = updated_sharing
+            updated_sharing["approved_by"] = proposed_votes
+            updated_sharing.pop("approval_votes", None)
+        elif args.decision in {"approve", "activate", "supersede"}:
+            updated = copy.deepcopy(metadata)
+            updated["status"] = "proposed"
+            updated_sharing = updated.get("sharing") if isinstance(updated.get("sharing"), dict) else {}
+            updated["sharing"] = updated_sharing
+            updated_sharing["approval_votes"] = proposed_votes
+            updated_sharing["approved_by"] = []
+            updated_sharing["approved_at"] = None
+            updated_sharing["evidence_digest"] = digest
+            updated_sharing["reviewed_by"] = args.principal
+            updated_sharing["reviewed_at"] = approved_at
+            updated_sharing["review_decision"] = "approve_vote"
         else:
             updated = copy.deepcopy(metadata)
             updated["status"] = "rejected"
@@ -996,7 +1102,7 @@ def manage_l3_review(args: argparse.Namespace) -> int:
     target = root / record["path"]
     rendered = render_memory_document(updated, record["body"])
     superseded_updates: list[tuple[Path, str, str]] = []
-    if args.decision == "supersede":
+    if args.decision == "supersede" and quorum_met:
         supersedes_ids = list((eligibility or {}).get("supersedes_ids", []))
         if not supersedes_ids:
             raise UpgradeException(
@@ -1170,6 +1276,130 @@ def manage_validate(args: argparse.Namespace) -> int:
     if args.strict_warnings:
         command.append("--strict-warnings")
     return subprocess.run(command, check=False).returncode
+
+
+def _print_authoring_plan(plan: dict[str, Any], as_json: bool) -> None:
+    public = {key: value for key, value in plan.items() if not key.startswith("_")}
+    if as_json:
+        print(json.dumps(public, ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        print(f"PLAN ID {public['plan_id']}")
+        print(f"ACTION {public['kind']}\t{public['document_id']}\t{public['path']}")
+
+
+def manage_scaffold(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve(strict=True)
+    config = repository_config(root)
+    require_repository_manager(root, config, args)
+    if args.document_type not in TECHNICAL_DOCUMENT_TYPES:
+        raise ValueError(f"document type must be one of {sorted(TECHNICAL_DOCUMENT_TYPES)}")
+    target = (root / args.output).resolve()
+    source_paths = sorted(set(args.source_path or []))
+    if not source_paths:
+        raise ValueError("technical document scaffold requires at least one --source-path")
+    for source_path in source_paths:
+        candidate = (root / source_path).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError as exc:
+            raise ValueError(f"source path escapes repository: {source_path}") from exc
+        if not candidate.exists():
+            raise ValueError(f"source path does not exist: {source_path}")
+    today = datetime.now(timezone.utc).date().isoformat()
+    metadata = {
+        "id": args.document_id,
+        "title": args.title,
+        "type": args.document_type,
+        "status": "draft",
+        "authority": "informative",
+        "topics": [args.topic],
+        "summary": args.summary or f"Draft {args.document_type} document for {args.title}.",
+        "relations": [{"type": "implemented_by", "target": value} for value in source_paths],
+        "reviewed": today,
+        "created_at": None,
+        "modified_at": None,
+        "verified_at": None,
+        "revision": 1,
+        "history_ref": history_ref_for(args.document_id),
+        "technical_writing": True,
+        "context": {
+            "audience": args.audience,
+            "repository": args.repository_id or f"repo:{root.name.casefold()}",
+            "source_commit": None,
+            "source_paths": source_paths,
+            "symbols": sorted(set(args.symbol or [])),
+            "generated": False,
+            "generator": None,
+        },
+        "governance": {
+            "owner": args.principal,
+            "reviewers": sorted(set(args.reviewer or [args.principal])),
+            "review_cadence_days": args.review_cadence_days,
+            "source_of_truth": args.source_of_truth or source_paths[0],
+            "last_source_check": today,
+            "duplicate_of": None,
+            "retirement_reason": None,
+            "scope": args.governance_scope,
+            **({"domain": args.domain or root.name.casefold()} if args.governance_scope == "domain" else {}),
+        },
+        "access": {"visibility": "team", "owner": args.principal, "team": args.team, "grants": []},
+        "embedding": {"mode": "local_only", "content": "full"},
+    }
+    frontmatter = yaml.safe_dump(metadata, allow_unicode=True, sort_keys=False).rstrip()
+    content = f"---\n{frontmatter}\n---\n\n{template_body(args.document_type, args.title)}"
+    plan = plan_new_document(root, target, content, args.document_id, kind="scaffold technical document")
+    if not args.apply:
+        _print_authoring_plan(plan, args.json)
+        return 0
+    if not args.plan_id:
+        raise ValueError("--apply requires --plan-id")
+    result = apply_new_document(root, plan, actor=args.principal, plan_id=args.plan_id)
+    print_upgrade_payload(result, args.json)
+    return 0
+
+
+def manage_retrieval_gap(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve(strict=True)
+    config = repository_config(root)
+    identity_subjects(args)
+    plan = plan_gap(
+        query=args.query, principal=args.principal, team=args.team, reason=args.reason,
+        work_unit=args.work_unit, status=args.status,
+        resolution_document_id=args.resolution_document_id,
+    )
+    if not args.apply:
+        print_upgrade_payload(plan, args.json)
+        return 0
+    if not args.plan_id:
+        raise ValueError("--apply requires --plan-id")
+    if args.resolution_document_id:
+        readable_ids = {
+            str(record["metadata"].get("id"))
+            for record in allowed_records(load_records(root, config), config, identity_subjects(args), include_inactive=True)
+        }
+        if args.resolution_document_id not in readable_ids:
+            raise ValueError("resolution document is not readable or does not exist")
+    result = append_gap(ledger_path(root, config), plan, plan_id=args.plan_id)
+    print_upgrade_payload(result, args.json)
+    return 0
+
+
+def generate_context(args: argparse.Namespace) -> int:
+    root = Path(args.repository).resolve(strict=True)
+    config = repository_config(root)
+    require_repository_manager(root, config, args)
+    plan = build_context_plan(
+        root, commit=args.commit, paths=args.path, symbols=args.symbol or [],
+        owner=args.principal, team=args.team, output=args.output,
+    )
+    if not args.apply:
+        _print_authoring_plan(plan, args.json)
+        return 0
+    if not args.plan_id:
+        raise ValueError("--apply requires --plan-id")
+    result = apply_context_plan(root, plan, actor=args.principal, plan_id=args.plan_id)
+    print_upgrade_payload(result, args.json)
+    return 0
 
 
 def _public_document_plan(plan: dict[str, Any]) -> dict[str, Any]:
@@ -1609,12 +1839,38 @@ def build_parser() -> argparse.ArgumentParser:
     add_identity_arguments(history_query)
     history_query.set_defaults(handler=query_history)
 
+    gap_report = queries.add_parser("gap-report")
+    gap_report.add_argument("repository")
+    gap_report.add_argument("--status", choices=("open", "resolved"))
+    gap_report.add_argument("--all", action="store_true")
+    gap_report.add_argument("--json", action="store_true")
+    add_identity_arguments(gap_report)
+    gap_report.set_defaults(handler=query_gap_report)
+
+    governance_report = queries.add_parser("governance-report")
+    governance_report.add_argument("repository")
+    governance_report.add_argument("--json", action="store_true")
+    add_identity_arguments(governance_report)
+    governance_report.set_defaults(handler=query_governance_report)
+
     okf_export = queries.add_parser("okf-export")
     okf_export.add_argument("repository")
     okf_export.add_argument("--id", dest="document_id", required=True)
     okf_export.add_argument("--json", action="store_true")
     add_identity_arguments(okf_export)
     okf_export.set_defaults(handler=query_okf_export)
+
+    context_generator = groups.add_parser("generate-context", help="Plan or create a local Git-backed code-context draft")
+    context_generator.add_argument("repository")
+    context_generator.add_argument("--commit", required=True)
+    context_generator.add_argument("--path", action="append")
+    context_generator.add_argument("--symbol", action="append", default=[])
+    context_generator.add_argument("--output")
+    context_generator.add_argument("--plan-id")
+    context_generator.add_argument("--apply", action="store_true")
+    context_generator.add_argument("--json", action="store_true")
+    add_identity_arguments(context_generator)
+    context_generator.set_defaults(handler=generate_context)
 
     manage = groups.add_parser("manage", help="Validation and explicitly applied mutations")
     managers = manage.add_subparsers(dest="manage_command", required=True)
@@ -1700,6 +1956,42 @@ def build_parser() -> argparse.ArgumentParser:
     document_move.add_argument("--json", action="store_true")
     add_identity_arguments(document_move)
     document_move.set_defaults(handler=manage_document_move)
+
+    scaffold = managers.add_parser("scaffold")
+    scaffold.add_argument("repository")
+    scaffold.add_argument("document_type", choices=sorted(TECHNICAL_DOCUMENT_TYPES))
+    scaffold.add_argument("--id", dest="document_id", required=True)
+    scaffold.add_argument("--title", required=True)
+    scaffold.add_argument("--output", required=True)
+    scaffold.add_argument("--topic", default="technical-writing")
+    scaffold.add_argument("--summary")
+    scaffold.add_argument("--audience", action="append", choices=("human", "agent"), default=["human", "agent"])
+    scaffold.add_argument("--source-path", action="append", required=True)
+    scaffold.add_argument("--source-of-truth")
+    scaffold.add_argument("--symbol", action="append", default=[])
+    scaffold.add_argument("--repository-id")
+    scaffold.add_argument("--reviewer", action="append")
+    scaffold.add_argument("--review-cadence-days", type=int, default=90)
+    scaffold.add_argument("--governance-scope", choices=("standards", "domain"), default="domain")
+    scaffold.add_argument("--domain")
+    scaffold.add_argument("--plan-id")
+    scaffold.add_argument("--apply", action="store_true")
+    scaffold.add_argument("--json", action="store_true")
+    add_identity_arguments(scaffold)
+    scaffold.set_defaults(handler=manage_scaffold)
+
+    retrieval_gap = managers.add_parser("retrieval-gap")
+    retrieval_gap.add_argument("repository")
+    retrieval_gap.add_argument("--query", required=True)
+    retrieval_gap.add_argument("--reason", required=True, choices=("no_result", "acl_hidden", "stale", "ambiguous"))
+    retrieval_gap.add_argument("--work-unit", required=True)
+    retrieval_gap.add_argument("--status", choices=("open", "resolved"), default="open")
+    retrieval_gap.add_argument("--resolution-document-id")
+    retrieval_gap.add_argument("--plan-id")
+    retrieval_gap.add_argument("--apply", action="store_true")
+    retrieval_gap.add_argument("--json", action="store_true")
+    add_identity_arguments(retrieval_gap)
+    retrieval_gap.set_defaults(handler=manage_retrieval_gap)
 
     setup_claude_alias = managers.add_parser("setup-claude-alias")
     setup_claude_alias.add_argument("repository")
@@ -1792,6 +2084,8 @@ def main() -> int:
             "document-finalize",
             "document-verify",
             "document-move",
+            "scaffold",
+            "retrieval-gap",
             "setup-claude-alias",
         }:
             wrapped = UpgradeException(UpgradeErrorCode.INVALID_INPUT, str(exc))

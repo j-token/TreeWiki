@@ -1,6 +1,7 @@
-version: 4
+version: 5
 documents:
   include:
+    - "docs/chatgpt-http-development.md"
     - AGENTS.md
     - "**/AGENTS.md"
     - "docs/**/*.md"
@@ -10,8 +11,16 @@ documents:
     - "lmwiki/**/assets/AGENTS.md"
     - "treewiki/**/assets/AGENTS.md"
     - "skills/**/assets/AGENTS.md"
+    - "plugins/**/skills/**/assets/AGENTS.md"
+    - ".agents/**/skills/**/assets/AGENTS.md"
+    - ".agents/skills/.treewiki-backups/**"
     - ".knowledge/upgrade-backups/**"
     - ".knowledge/document-backups/**"
+    - ".knowledge/document-history/**"
+  composition:
+    body_line_target: 50
+    body_line_hard_limit: 80
+    body_token_hard_limit: 1000
 vocabulary_path: docs/vocabulary/topics.yml
 glossary_path: docs/vocabulary/glossary.yml
 review_warning_days: 180
@@ -28,7 +37,8 @@ memory:
     persona_path: docs/memory/l3/persona
 history:
   schema: 1
-  sidecar: stable-id
+  storage: local
+  path: .knowledge/document-history
   enforce: true
 hooks:
   enabled: false
@@ -58,6 +68,16 @@ retrieval:
   bm25_result_limit: 12
   bm25_query_mode: high_recall
   result_content: locations_only
+  gap_ledger_path: .knowledge/index/retrieval-gaps.jsonl
+governance:
+  required: true
+  standards_committee:
+    managers: [user:owner]
+    quorum: 1
+  domain_committees:
+    repository:
+      managers: [user:owner]
+      quorum: 1
 embedding:
   enabled: false
   execution: none

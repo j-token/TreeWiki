@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { stat } from "node:fs/promises";
 import { delimiter, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { digest, type Binding } from "./bindings.js";
@@ -8,6 +9,13 @@ export type CommandResult = { stdout: string; stderr: string; exitCode: number }
 export type CommandExecutor = (program: string, args: string[]) => Promise<CommandResult>;
 export type SearchHit = { id: string; title: string; url: string };
 export type ReviewDecision = "activate" | "reject" | "supersede";
+export type RetrievalGapInput = {
+  query: string;
+  reason: "no_result" | "acl_hidden" | "stale" | "ambiguous";
+  workUnit: string;
+  status?: "open" | "resolved";
+  resolutionDocumentId?: string;
+};
 export type L3Candidate = {
   id: string; title: string; summary: string; body: string;
   category: "knowledge" | "persona"; kind: string; scope: string; subject: string;
@@ -112,6 +120,28 @@ export class TreeWikiCore {
   async history(id: string): Promise<unknown> {
     return JSON.parse(await this.run(["query", "history", this.binding.repository, "--id", id, "--json", ...this.identityArgs()]));
   }
+  async planRetrievalGap(input: RetrievalGapInput): Promise<Record<string, unknown>> {
+    const args = ["manage", "retrieval-gap", this.binding.repository, "--query", input.query,
+      "--reason", input.reason, "--work-unit", input.workUnit, "--status", input.status ?? "open", "--json", ...this.identityArgs()];
+    if (input.resolutionDocumentId) args.splice(args.indexOf("--json"), 0, "--resolution-document-id", input.resolutionDocumentId);
+    return JSON.parse(await this.run(args));
+  }
+  async recordRetrievalGap(input: RetrievalGapInput & { planId: string }): Promise<Record<string, unknown>> {
+    const args = ["manage", "retrieval-gap", this.binding.repository, "--query", input.query,
+      "--reason", input.reason, "--work-unit", input.workUnit, "--status", input.status ?? "open"];
+    if (input.resolutionDocumentId) args.push("--resolution-document-id", input.resolutionDocumentId);
+    args.push("--plan-id", input.planId, "--apply", "--json", ...this.identityArgs());
+    return JSON.parse(await this.run(args));
+  }
+  async listRetrievalGaps(status?: "open" | "resolved"): Promise<Array<Record<string, unknown>>> {
+    const args = ["query", "gap-report", this.binding.repository, "--json", ...this.identityArgs()];
+    if (status) args.splice(3, 0, "--status", status);
+    const payload = JSON.parse(await this.run(args)) as { gaps?: Array<Record<string, unknown>> };
+    return payload.gaps ?? [];
+  }
+  async governanceReport(): Promise<Record<string, unknown>> {
+    return JSON.parse(await this.run(["query", "governance-report", this.binding.repository, "--json", ...this.identityArgs()]));
+  }
   async listL3Candidates(ids?: string[]): Promise<L3Candidate[]> {
     const selected = new Set(ids ?? []);
     const documents = (await this.listDocuments()).filter((item) => item.status === "proposed" &&
@@ -129,9 +159,20 @@ export class TreeWikiCore {
     return candidates.filter((item): item is L3Candidate => item !== null).sort((a, b) => a.id.localeCompare(b.id));
   }
   async overview() {
+    const configFile = await stat(resolve(this.binding.repository, ".knowledge", "config.yml")).catch(() => null);
+    if (!configFile?.isFile()) {
+      return {
+        adopted: false,
+        status: "not_adopted",
+        documentCount: 0,
+        candidateCount: 0,
+        upgradeRequired: false,
+        upgrade: null,
+      };
+    }
     const [documents, candidates, upgrade] = await Promise.all([this.listDocuments(), this.listL3Candidates(), this.upgradeStatus()]);
     const overall = objectValue(upgrade.overall);
-    return { adopted: documents.length > 0, documentCount: documents.length, candidateCount: candidates.length,
+    return { adopted: true, status: "adopted", documentCount: documents.length, candidateCount: candidates.length,
       upgradeRequired: String(overall.status ?? "current") !== "current", upgrade };
   }
   async planL3Review(id: string, decision: ReviewDecision): Promise<Record<string, unknown>> {

@@ -4,7 +4,7 @@ TreeWiki는 저장소 지도, 계약, 결정, runbook, 문서 이력과 승인 �
 
 ## 릴리스와 호환성
 
-현재 TreeWiki 릴리스는 **0.2.1**입니다. `LMWiki` 호환 shim은 제거했지만 과거 ID와 provenance는 바꾸지 않습니다. config v4와 memory layout v2는 유형화된 L3 knowledge/persona 경로와 안정 ID 문서 이력을 추가합니다.
+현재 TreeWiki 릴리스는 **0.2.1**입니다. `LMWiki` 호환 shim은 제거했지만 과거 ID와 provenance는 바꾸지 않습니다. config v5는 유형화된 L3 knowledge/persona 경로와 공유 lifecycle 요약을 유지하면서 안정 ID 상세 문서 이력을 로컬에 보관합니다.
 
 쓰기 전에 상태와 안내를 확인합니다.
 
@@ -61,11 +61,11 @@ codex plugin marketplace add j-token/treewiki --ref v0.2.1
 codex plugin add treewiki@treewiki-marketplace
 ```
 
-새 Codex 작업에서 현재 저장소의 TreeWiki 상태를 확인해 달라고 요청합니다. Codex는 자체 MCP 도구·결과·승인 UI를 사용해 binding, Overview, ACL Search, 문서 History, knowledge/persona L3 후보와 업그레이드 계획을 보여줍니다. binding 변경, L3 결정, 저장소 로컬 업그레이드는 먼저 dry-run 계획만 만들고 정확한 plan ID와 digest에 대한 명시적 승인 뒤에만 적용합니다. 전역 스킬·hook과 승인형 기억 업그레이드는 채팅으로 안내합니다.
+새 Codex 작업에서 현재 저장소의 TreeWiki 상태를 확인해 달라고 요청합니다. Codex는 네이티브 MCP 도구·결과·승인 표면으로 binding 조회, ACL 검색, 문서 이력, knowledge/persona L3 후보와 업그레이드 계획을 제공합니다. binding 변경, L3 결정, 저장소 로컬 업그레이드는 먼저 dry-run 계획만 만들고 정확한 plan ID와 digest에 대한 명시적 승인 뒤에만 적용합니다.
 
 추적되는 stdio MCP, Python 코어, PyYAML과 스킬에는 설치 후 `npm install`이나 `pip install`이 필요하지 않습니다. 저장소 도구는 승인된 `bindingId`만 받아 매 호출에서 저장소나 ACL identity가 바뀌는 일을 막습니다. 자세한 구조는 [`plugins/treewiki/README.md`](plugins/treewiki/README.md)에 있습니다.
 
-선택적 HTTP transport도 커스텀 App 리소스 없이 같은 일반 MCP 도구를 제공합니다. 터널과 Developer mode는 Codex 설치 절차가 아니며 [`docs/chatgpt-http-development.md`](docs/chatgpt-http-development.md)에 별도로 설명합니다.
+선택적 HTTP transport도 같은 네이티브 MCP 도구를 제공합니다. 터널과 Developer mode는 Codex 설치 절차가 아니며 [`docs/chatgpt-http-development.md`](docs/chatgpt-http-development.md)에 별도로 설명합니다.
 
 ## 기억과 공유
 
@@ -83,7 +83,7 @@ TreeWiki는 정확히 같은 주장뿐 아니라 여러 관찰이 같은 상위 
 
 ## 문서 모델과 검증
 
-관리 문서는 `created_at`, `modified_at`, `verified_at`, `revision`, `history_ref`를 갖고 옆의 `<stable-id>.history.jsonl`에 의미 변경 이력을 기록합니다. 원출처 재검증은 `verified_at`만 바꾸며 semantic revision을 올리지 않습니다. Markdown/frontmatter와 ledger가 원본이고 색인은 재생성 가능한 파생물입니다.
+관리 문서는 `created_at`, `modified_at`, `verified_at`, `revision`과 로컬 `history_ref`를 공유합니다. actor, plan, 사유, 해시 체인이 담긴 상세 이벤트는 Git에서 제외된 `.knowledge/document-history/`에만 보관하고 Git을 공유 변경 이력으로 사용합니다. 원출처 재검증은 `verified_at`만 바꾸며 semantic revision을 올리지 않습니다.
 
 OKF v0.2는 TreeWiki 네이티브 저장 스키마를 대체하지 않는 import/export 호환 계층입니다. export는 수명주기 시각, 검증 이벤트, 근거 출처와 상태를 매핑하고 TreeWiki 고유 메타데이터를 extension으로 보존합니다.
 
@@ -99,6 +99,19 @@ python skills/treewiki/scripts/knowledge_cli.py manage validate <repository-root
 ```
 
 최초 구축 때만 로컬 임베딩과 SQLite BM25 사용 여부를 묻습니다. 명시적 허락 없이는 문서를 외부로 보내지 않습니다.
+
+## 지식 시스템 자동화
+
+기술 문서는 `how_to`, `reference`, `explanation`, `tutorial`, `troubleshooting`, `api_contract` 유형과 `context`·`governance` 메타데이터를 사용합니다. 작성 작업은 항상 계획을 먼저 보여주고 검토가 필요한 `draft`만 만듭니다.
+
+```powershell
+python skills/treewiki/scripts/knowledge_cli.py manage scaffold <repository-root> how_to --id HOWTO-001 --title "안전한 배포" --output docs/references/deploy.md --source-path src/deploy.py --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py generate-context <repository-root> --commit HEAD --path src/deploy.py --symbol deploy --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py query gap-report <repository-root> --status open --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py query governance-report <repository-root> --principal user:owner --team team:product
+```
+
+네이티브 MCP는 동일 ACL identity의 연합 검색, 맥락 fetch, retrieval-gap plan/apply, 거버넌스 리포트를 제공합니다. 같은 stable ID가 여러 저장소에 있으면 자동 병합하지 않고 충돌로 반환합니다.
 
 ## 업그레이드 순서
 

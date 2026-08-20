@@ -69,6 +69,266 @@ def candidate_metadata(doc_id: str = "MEMORY-L3-RULE-004") -> dict:
 
 
 class DocumentHistoryTests(unittest.TestCase):
+    def test_missing_local_ledger_preserves_shared_lifecycle_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root / "docs" / "reference.md"
+            metadata = candidate_metadata("REFERENCE-BASELINE")
+            metadata.update(
+                {
+                    "type": "reference",
+                    "status": "active",
+                    "created_at": "2026-08-01T00:00:00Z",
+                    "modified_at": "2026-08-10T00:00:00Z",
+                    "verified_at": "2026-08-11T00:00:00Z",
+                    "revision": 7,
+                    "history_ref": ".knowledge/document-history/REFERENCE-BASELINE.jsonl",
+                }
+            )
+            metadata.pop("memory")
+            metadata.pop("category")
+            write_document(document, metadata)
+
+            plan = document_history.plan_documents(
+                root, [document], actor="user:owner", at="2026-08-20T00:00:00Z"
+            )
+            document_history.apply_document_plan(root, plan, plan_id=plan["plan_id"])
+
+            finalized, _, _ = document_history.parse_document(document)
+            self.assertEqual(finalized["revision"], 7)
+            self.assertEqual(finalized["created_at"], "2026-08-01T00:00:00Z")
+            self.assertEqual(finalized["modified_at"], "2026-08-10T00:00:00Z")
+            self.assertEqual(finalized["verified_at"], "2026-08-11T00:00:00Z")
+            events = document_history.read_history(
+                document_history.history_path_for(root, "REFERENCE-BASELINE")
+            )
+            self.assertEqual([(event["event"], event["revision"]) for event in events], [("migrated", 7)])
+
+            document.write_text(
+                document.read_text(encoding="utf-8").replace("# Body", "# Changed"),
+                encoding="utf-8",
+                newline="\n",
+            )
+            changed = document_history.plan_documents(
+                root, [document], actor="user:owner", at="2026-08-21T00:00:00Z"
+            )
+            document_history.apply_document_plan(root, changed, plan_id=changed["plan_id"])
+            updated, _, _ = document_history.parse_document(document)
+            self.assertEqual(updated["revision"], 8)
+            self.assertEqual(updated["modified_at"], "2026-08-21T00:00:00Z")
+            self.assertEqual(
+                [event["revision"] for event in document_history.read_history(
+                    document_history.history_path_for(root, "REFERENCE-BASELINE")
+                )],
+                [7, 8],
+            )
+
+    def test_legacy_colocated_ledger_moves_to_local_path_without_revision_change(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root / "docs" / "reference.md"
+            metadata = candidate_metadata("REFERENCE-LEGACY")
+            metadata.update({"type": "reference", "status": "active"})
+            metadata.pop("memory")
+            metadata.pop("category")
+            write_document(document, metadata)
+            initial = document_history.plan_documents(
+                root,
+                [document],
+                actor="user:owner",
+                created_ids=["REFERENCE-LEGACY"],
+                at="2026-08-19T00:00:00Z",
+            )
+            document_history.apply_document_plan(root, initial, plan_id=initial["plan_id"])
+            local = document_history.history_path_for(root, "REFERENCE-LEGACY")
+            legacy = document.with_name("REFERENCE-LEGACY.history.jsonl")
+            legacy.parent.mkdir(parents=True, exist_ok=True)
+            os.replace(local, legacy)
+            document.write_text(
+                document.read_text(encoding="utf-8").replace(
+                    ".knowledge/document-history/REFERENCE-LEGACY.jsonl",
+                    "./REFERENCE-LEGACY.history.jsonl",
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            migration = document_history.plan_documents(
+                root, [document], actor="user:owner", at="2026-08-20T00:00:00Z"
+            )
+            self.assertEqual(
+                migration["actions"][0]["legacy_history_path"],
+                "docs/REFERENCE-LEGACY.history.jsonl",
+            )
+            document_history.apply_document_plan(root, migration, plan_id=migration["plan_id"])
+
+            finalized, _, _ = document_history.parse_document(document)
+            self.assertEqual(finalized["revision"], 1)
+            self.assertEqual(
+                finalized["history_ref"],
+                ".knowledge/document-history/REFERENCE-LEGACY.jsonl",
+            )
+            self.assertTrue(local.is_file())
+            self.assertFalse(legacy.exists())
+            self.assertEqual(len(document_history.read_history(local)), 1)
+
+    def test_document_id_cannot_escape_local_history_directory(self) -> None:
+        with self.assertRaises(document_history.DocumentHistoryError) as caught:
+            document_history.history_ref_for("../outside")
+        self.assertEqual(caught.exception.code, "INVALID_DOCUMENT_ID")
+
+    def test_existing_local_ledger_enforces_chain_revision_and_plan_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root / "docs" / "reference.md"
+            metadata = candidate_metadata("REFERENCE-INTEGRITY")
+            metadata.update({"type": "reference", "status": "active"})
+            metadata.pop("memory")
+            metadata.pop("category")
+            write_document(document, metadata)
+            created = document_history.plan_documents(
+                root,
+                [document],
+                actor="user:owner",
+                created_ids=["REFERENCE-INTEGRITY"],
+                at="2026-08-19T00:00:00Z",
+            )
+            document_history.apply_document_plan(root, created, plan_id=created["plan_id"])
+            document.write_text(
+                document.read_text(encoding="utf-8").replace("# Body", "# Changed"),
+                encoding="utf-8",
+                newline="\n",
+            )
+            changed = document_history.plan_documents(
+                root, [document], actor="user:owner", at="2026-08-20T00:00:00Z"
+            )
+            document_history.apply_document_plan(root, changed, plan_id=changed["plan_id"])
+            history_path = document_history.history_path_for(root, "REFERENCE-INTEGRITY")
+            original = document_history.read_history(history_path)
+
+            for key, value in (
+                ("previous_hash", ZERO_HASH),
+                ("revision", 99),
+                ("plan_id", None),
+            ):
+                with self.subTest(key=key):
+                    tampered = [dict(event) for event in original]
+                    tampered[1][key] = value
+                    history_path.write_text(
+                        document_history.render_history(tampered),
+                        encoding="utf-8",
+                        newline="\n",
+                    )
+                    with self.assertRaises(document_history.DocumentHistoryError) as caught:
+                        document_history.read_history(history_path)
+                    self.assertEqual(caught.exception.code, "INVALID_HISTORY")
+
+    def test_local_and_legacy_ledgers_cannot_silently_diverge(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root / "docs" / "reference.md"
+            metadata = candidate_metadata("REFERENCE-CONFLICT")
+            metadata.update({"type": "reference", "status": "active"})
+            metadata.pop("memory")
+            metadata.pop("category")
+            write_document(document, metadata)
+            plan = document_history.plan_documents(
+                root,
+                [document],
+                actor="user:owner",
+                created_ids=["REFERENCE-CONFLICT"],
+                at="2026-08-19T00:00:00Z",
+            )
+            document_history.apply_document_plan(root, plan, plan_id=plan["plan_id"])
+            local = document_history.history_path_for(root, "REFERENCE-CONFLICT")
+            legacy = document.with_name("REFERENCE-CONFLICT.history.jsonl")
+            legacy.write_bytes(local.read_bytes())
+
+            with self.assertRaises(document_history.DocumentHistoryError) as caught:
+                document_history.plan_documents(root, [document], actor="user:owner")
+            self.assertEqual(caught.exception.code, "HISTORY_CONFLICT")
+
+    def test_stale_document_plan_does_not_create_local_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root / "docs" / "reference.md"
+            metadata = candidate_metadata("REFERENCE-STALE")
+            metadata.update({"type": "reference", "status": "active"})
+            metadata.pop("memory")
+            metadata.pop("category")
+            write_document(document, metadata)
+            plan = document_history.plan_documents(
+                root,
+                [document],
+                actor="user:owner",
+                created_ids=["REFERENCE-STALE"],
+                at="2026-08-19T00:00:00Z",
+            )
+            document.write_text(
+                document.read_text(encoding="utf-8") + "changed after plan\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            with self.assertRaises(document_history.DocumentHistoryError) as caught:
+                document_history.apply_document_plan(root, plan, plan_id=plan["plan_id"])
+            self.assertEqual(caught.exception.code, "STALE_PLAN")
+            self.assertFalse(
+                document_history.history_path_for(root, "REFERENCE-STALE").exists()
+            )
+
+    def test_legacy_migration_replace_failure_restores_legacy_and_document(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            document = root / "docs" / "reference.md"
+            metadata = candidate_metadata("REFERENCE-LEGACY-ROLLBACK")
+            metadata.update({"type": "reference", "status": "active"})
+            metadata.pop("memory")
+            metadata.pop("category")
+            write_document(document, metadata)
+            initial = document_history.plan_documents(
+                root,
+                [document],
+                actor="user:owner",
+                created_ids=["REFERENCE-LEGACY-ROLLBACK"],
+                at="2026-08-19T00:00:00Z",
+            )
+            document_history.apply_document_plan(root, initial, plan_id=initial["plan_id"])
+            local = document_history.history_path_for(root, "REFERENCE-LEGACY-ROLLBACK")
+            legacy = document.with_name("REFERENCE-LEGACY-ROLLBACK.history.jsonl")
+            os.replace(local, legacy)
+            document.write_text(
+                document.read_text(encoding="utf-8").replace(
+                    ".knowledge/document-history/REFERENCE-LEGACY-ROLLBACK.jsonl",
+                    "./REFERENCE-LEGACY-ROLLBACK.history.jsonl",
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
+            before_document = document.read_bytes()
+            before_legacy = legacy.read_bytes()
+            migration = document_history.plan_documents(
+                root, [document], actor="user:owner", at="2026-08-20T00:00:00Z"
+            )
+            real_replace = os.replace
+            calls = 0
+
+            def fail_second(source: str | Path, target: str | Path) -> None:
+                nonlocal calls
+                calls += 1
+                if calls == 2:
+                    raise OSError("local ledger replace fault")
+                real_replace(source, target)
+
+            with mock.patch.object(document_history.os, "replace", side_effect=fail_second):
+                with self.assertRaises(OSError):
+                    document_history.apply_document_plan(
+                        root, migration, plan_id=migration["plan_id"]
+                    )
+            self.assertEqual(document.read_bytes(), before_document)
+            self.assertEqual(legacy.read_bytes(), before_legacy)
+            self.assertFalse(local.exists())
+
     def test_candidate_notice_once_and_verification_does_not_increment_revision(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -111,7 +371,7 @@ class DocumentHistoryTests(unittest.TestCase):
             self.assertEqual(verified["modified_at"], "2026-08-19T00:00:00Z")
             self.assertEqual(verified["verified_at"], "2026-08-20T00:00:00Z")
             events = document_history.read_history(
-                document_history.history_path_for(document, metadata["id"])
+                document_history.history_path_for(root, metadata["id"])
             )
             self.assertEqual([event["event"] for event in events], ["created", "verified"])
 
@@ -132,7 +392,7 @@ class DocumentHistoryTests(unittest.TestCase):
             self.assertIsNone(finalized["created_at"])
             self.assertIsNone(finalized["modified_at"])
             events = document_history.read_history(
-                document_history.history_path_for(document, "REFERENCE-001")
+                document_history.history_path_for(root, "REFERENCE-001")
             )
             self.assertEqual(events[0]["event"], "migrated")
 
@@ -168,10 +428,10 @@ class DocumentHistoryTests(unittest.TestCase):
                     document_history.apply_document_plan(root, plan, plan_id=plan["plan_id"])
             self.assertEqual(document.read_bytes(), before)
             self.assertFalse(
-                document_history.history_path_for(document, "REFERENCE-ROLLBACK").exists()
+                document_history.history_path_for(root, "REFERENCE-ROLLBACK").exists()
             )
 
-    def test_document_and_stable_id_sidecar_move_together(self) -> None:
+    def test_document_move_keeps_stable_id_local_history_path(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             source = root / "docs" / "old" / "reference.md"
@@ -194,9 +454,7 @@ class DocumentHistoryTests(unittest.TestCase):
             self.assertEqual(result["status"], "APPLIED")
             self.assertFalse(source.exists())
             self.assertTrue(destination.is_file())
-            self.assertTrue(
-                document_history.history_path_for(destination, "REFERENCE-MOVE").is_file()
-            )
+            self.assertTrue(document_history.history_path_for(root, "REFERENCE-MOVE").is_file())
 
 
 class L3ThresholdTests(unittest.TestCase):
@@ -367,7 +625,7 @@ class AdapterAndCompatibilityTests(unittest.TestCase):
         self.assertNotIn("ui_resource", release["adapters"]["codex"])
         self.assertNotIn("workbench_hash", release["adapters"]["codex"])
 
-    def test_agent_plugin_uses_native_mcp_tools_and_exact_plan_apply(self) -> None:
+    def test_agent_plugin_uses_native_mcp_tools_without_custom_resources(self) -> None:
         plugin = ROOT / "plugins" / "treewiki"
         server = (plugin / "src" / "server.ts").read_text(encoding="utf-8")
         package = json.loads((plugin / "package.json").read_text(encoding="utf-8"))
@@ -380,15 +638,20 @@ class AdapterAndCompatibilityTests(unittest.TestCase):
         self.assertIn("candidateDigest", server)
         self.assertIn("planId", server)
         self.assertIn("destructiveHint: true", server)
+        self.assertNotIn('"open_treewiki_workbench"', server)
+        self.assertNotIn('"ui://treewiki/', server)
+        self.assertNotIn('registerResource', server)
+        self.assertNotIn('resourceUri:', server)
         self.assertNotIn("registerAppTool", server)
         self.assertNotIn("registerAppResource", server)
         self.assertNotIn("openai/outputTemplate", server)
-        self.assertNotIn("open_treewiki_workbench", server)
         self.assertNotIn("workbench_status", (ROOT / "skills" / "treewiki" / "scripts" / "upgrade.py").read_text(encoding="utf-8"))
         self.assertNotIn("@modelcontextprotocol/ext-apps", package["dependencies"])
-        self.assertNotIn("build:widget", package["scripts"])
-        self.assertFalse((plugin / "web" / "src" / "workbench.html").exists())
-        self.assertFalse((plugin / "web" / "dist" / "workbench.html").exists())
+        self.assertNotIn("build:workbench", package["scripts"])
+        self.assertEqual(package["scripts"]["build:server"], "tsc -p tsconfig.json")
+        self.assertFalse((plugin / "src" / "workbench.html").exists())
+        self.assertFalse((plugin / "src" / "workbench.generated.ts").exists())
+        self.assertFalse((plugin / "src" / "workbench-state.ts").exists())
 
     def test_router_fixtures_cover_six_modes_and_progressive_references(self) -> None:
         plugin = ROOT / "plugins" / "treewiki-claude"

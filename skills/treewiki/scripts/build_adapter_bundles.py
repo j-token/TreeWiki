@@ -10,14 +10,20 @@ from pathlib import Path
 
 RELEASE = "0.2.1"
 RUNTIME_FILES = (
+    "authoring.py",
     "build_embedding_index.py",
     "build_search_index.py",
     "claude_alias.py",
+    "code_context.py",
+    "document_composition.py",
     "document_history.py",
+    "governance_report.py",
     "knowledge_cli.py",
     "memory_policy.py",
     "okf_v02.py",
     "release_manifest.py",
+    "retrieval_gaps.py",
+    "technical_writing.py",
     "upgrade.py",
     "validate_knowledge.py",
 )
@@ -102,7 +108,6 @@ def build(repository: Path, *, check: bool = False) -> dict:
             shutil.copy2(license_file, vendor_root / "PyYAML-LICENSE")
         except (importlib.metadata.PackageNotFoundError, OSError, StopIteration) as exc:
             raise RuntimeError("PyYAML is required to build the portable vendor runtime") from exc
-
     for adapter, destination in destinations.items():
         if not check:
             destination.mkdir(parents=True, exist_ok=True)

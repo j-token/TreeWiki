@@ -7,9 +7,8 @@ the same bundled stdio MCP server.
 
 The committed `dist/treewiki-mcp.mjs`, canonical skill, Python core, and vendored
 PyYAML runtime allow installation without `npm install` or `pip install`. Codex
-renders the standard MCP tool, result, and approval surfaces; this plugin does not
-register a custom MCP Apps resource. `npm run build` is only for maintainers
-rebuilding the release.
+uses its standard tool, result, and approval surfaces. `npm run build` is only for
+maintainers rebuilding the release.
 
 Optional remote validation uses `npm run start:http`. It is not the default Codex
 installation path and still stores bindings beneath `PLUGIN_DATA`.

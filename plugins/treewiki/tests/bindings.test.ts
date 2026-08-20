@@ -46,3 +46,21 @@ test("repository and ACL identities are validated before planning", async () => 
     await assert.rejects(() => f.store.plan({ action: "upsert", repository: resolve(f.root, "missing"), principal: "user:test", team: "team:repo" }), /does not exist/u);
   } finally { await rm(f.root, { recursive: true, force: true }); }
 });
+
+test("overlays require an existing binding with the same ACL identity", async () => {
+  const f = await fixture();
+  try {
+    const centralPlan = await f.store.plan({ action: "upsert", repository: f.repository, principal: "user:test", team: "team:repo" });
+    const central = (await f.store.apply(centralPlan.planId, centralPlan.bindingDigest)).binding;
+    const repository = resolve(f.root, "repo-overlay"); await mkdir(repository);
+    const overlayPlan = await f.store.plan({ action: "upsert", repository, principal: "user:test", team: "team:repo", overlayBindingIds: [central.id] });
+    const overlay = (await f.store.apply(overlayPlan.planId, overlayPlan.bindingDigest)).binding;
+    assert.deepEqual(overlay.overlayBindingIds, [central.id]);
+
+    const foreignRepository = resolve(f.root, "repo-foreign"); await mkdir(foreignRepository);
+    const foreignPlan = await f.store.plan({ action: "upsert", repository: foreignRepository, principal: "user:foreign", team: "team:foreign" });
+    const foreign = (await f.store.apply(foreignPlan.planId, foreignPlan.bindingDigest)).binding;
+    const rejectedRepository = resolve(f.root, "repo-rejected"); await mkdir(rejectedRepository);
+    await assert.rejects(() => f.store.plan({ action: "upsert", repository: rejectedRepository, principal: "user:test", team: "team:repo", overlayBindingIds: [foreign.id] }), /same principal and team/u);
+  } finally { await rm(f.root, { recursive: true, force: true }); }
+});

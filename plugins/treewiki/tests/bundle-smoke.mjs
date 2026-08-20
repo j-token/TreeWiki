@@ -29,12 +29,12 @@ const client = new Client({ name: "treewiki-bundle-smoke", version: "0.2.1" }, {
 try {
   await client.connect(transport);
   const tools = await client.listTools();
-  assert.equal(tools.tools.length, 12);
+  assert.equal(tools.tools.length, 18);
   assert.equal(tools.tools.some((tool) => tool.name === "open_treewiki_workbench"), false);
   assert.ok(tools.tools.every((tool) => tool._meta === undefined));
+  assert.equal(client.getServerCapabilities()?.resources, undefined);
   assert.equal(tools.tools.find((tool) => tool.name === "list_bindings")?.annotations?.readOnlyHint, true);
   assert.equal(tools.tools.find((tool) => tool.name === "apply_binding_change")?.annotations?.destructiveHint, true);
-  await assert.rejects(client.readResource({ uri: "ui://treewiki/workbench-v1.html" }));
   const plan = await client.callTool({ name: "plan_binding_change", arguments: {
     action: "upsert", repository, principal: "user:test", team: "team:repo",
   } });

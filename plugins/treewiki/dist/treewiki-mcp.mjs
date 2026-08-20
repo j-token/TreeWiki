@@ -38367,9 +38367,17 @@ var EMPTY_COMPLETION_RESULT = {
 var id = external_exports.string().trim().min(1).max(300);
 var hash2 = external_exports.string().regex(/^sha256:[0-9a-f]{64}$/u);
 var decision = external_exports.enum(["activate", "reject", "supersede"]);
+var gapReason = external_exports.enum(["no_result", "acl_hidden", "stale", "ambiguous"]);
+var gapStatus = external_exports.enum(["open", "resolved"]);
 var stage = external_exports.enum(["runtime", "config", "document-history", "memory-layout", "index", "adapters", "claude-alias", "hook"]);
 var readAnnotations = { readOnlyHint: true, destructiveHint: false, openWorldHint: false, idempotentHint: true };
 var writeAnnotations = { readOnlyHint: false, destructiveHint: true, openWorldHint: false, idempotentHint: false };
+var SERVER_INSTRUCTIONS = [
+  "Call list_bindings first, then use the search, fetch, history, review, and upgrade tools for the selected approved binding.",
+  "Pass only an approved bindingId to repository tools.",
+  "For every write, call the matching plan tool first, present its exact result, and wait for a separate explicit user confirmation of that exact plan and digest before calling apply.",
+  "Never automatically apply or retry writes. If a plan is stale, re-plan. If an apply outcome is uncertain, read back current state without retrying the write."
+].join(" ");
 function record2(value) {
   return value !== null && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
@@ -38403,9 +38411,15 @@ var upgradePlanDetails = [
   { label: "Apply allowed", keys: ["applyAllowed", "apply_allowed"] },
   { label: "Blocking reason", keys: ["blockingReason", "blocking_reason"] }
 ];
+var gapPlanDetails = [
+  { label: "Plan ID", keys: ["plan_id"] },
+  { label: "Gap ID", keys: ["gap_id"] },
+  { label: "Reason", keys: ["reason"] },
+  { label: "Status", keys: ["status"] }
+];
 function createTreeWikiServer(service) {
   const server = new McpServer({ name: "treewiki", version: "0.2.1" }, {
-    instructions: "Pass only an approved bindingId to repository tools. All writes require an exact dry-run plan and digest, followed by explicit approval."
+    instructions: SERVER_INSTRUCTIONS
   });
   server.registerTool(
     "list_bindings",
@@ -38417,19 +38431,20 @@ function createTreeWikiServer(service) {
   );
   server.registerTool("plan_binding_change", {
     title: "Plan TreeWiki binding change",
-    description: "Validate a repository profile and create a non-writing plan.",
+    description: "Validate a repository profile and return a non-writing plan. Stop until the user separately confirms the exact plan and binding digest.",
     inputSchema: {
       action: external_exports.enum(["upsert", "remove"]),
       repository: external_exports.string().trim().min(1),
       principal: external_exports.string().trim().min(1),
       team: external_exports.string().trim().min(1),
-      documentBaseUrl: external_exports.string().url().optional()
+      documentBaseUrl: external_exports.string().url().optional(),
+      overlayBindingIds: external_exports.array(id).max(20).optional()
     },
     annotations: readAnnotations
   }, async (input) => response(await service.planBindingChange(input), "Binding change plan created; it has not been applied.", bindingPlanDetails));
   server.registerTool("apply_binding_change", {
     title: "Apply approved binding change",
-    description: "Apply the exact previously planned binding change.",
+    description: "Apply the exact previously planned binding change only after separate explicit user approval of its plan ID and binding digest.",
     inputSchema: { planId: hash2, bindingDigest: hash2 },
     annotations: writeAnnotations
   }, async ({ planId, bindingDigest }) => response(await service.applyBindingChange(planId, bindingDigest), "Approved binding change applied."));
@@ -38437,20 +38452,20 @@ function createTreeWikiServer(service) {
     "get_treewiki_overview",
     {
       title: "Get TreeWiki overview",
-      description: "Inspect adoption, upgrade state, and candidate count.",
+      description: "Retrieve adoption, upgrade state, and candidate count for an approved binding.",
       inputSchema: { bindingId: id },
       annotations: readAnnotations
     },
     async ({ bindingId: bindingId2 }) => {
       const overview = await service.overview(bindingId2);
-      return response(overview, `TreeWiki overview: ${String(overview.documentCount ?? 0)} document(s), ${String(overview.candidateCount ?? 0)} L3 candidate(s), upgrade required: ${String(overview.upgradeRequired ?? false)}.`);
+      return response(overview, `TreeWiki overview: adopted: ${String(overview.adopted ?? false)}, ${String(overview.documentCount ?? 0)} document(s), ${String(overview.candidateCount ?? 0)} L3 candidate(s), upgrade required: ${String(overview.upgradeRequired ?? false)}.`);
     }
   );
   server.registerTool(
     "search",
     {
       title: "Search TreeWiki",
-      description: "ACL-filtered knowledge search for one approved binding.",
+      description: "Run ACL-filtered knowledge search for one approved binding.",
       inputSchema: { bindingId: id, query: external_exports.string().trim().min(1).max(500) },
       annotations: readAnnotations
     },
@@ -38460,14 +38475,37 @@ function createTreeWikiServer(service) {
     }
   );
   server.registerTool(
+    "search_federated",
+    {
+      title: "Search federated TreeWiki knowledge",
+      description: "Search a binding and its explicitly approved same-identity overlays. Duplicate stable IDs are returned as conflicts and are never auto-merged.",
+      inputSchema: { bindingId: id, query: external_exports.string().trim().min(1).max(500) },
+      annotations: readAnnotations
+    },
+    async ({ bindingId: bindingId2, query }) => {
+      const results = await service.federatedSearch(bindingId2, query);
+      return response({ results }, `${results.length} ACL-approved federated TreeWiki result(s).`);
+    }
+  );
+  server.registerTool(
     "fetch",
     {
       title: "Fetch TreeWiki document",
-      description: "Read one ACL-approved document.",
+      description: "Read one ACL-approved document selected from native TreeWiki search results and return it to Codex as structured content.",
       inputSchema: { bindingId: id, documentId: id },
       annotations: readAnnotations
     },
     async ({ bindingId: bindingId2, documentId }) => response(await service.fetch(bindingId2, documentId), `Loaded ACL-approved TreeWiki document ${documentId}.`)
+  );
+  server.registerTool(
+    "fetch_with_context",
+    {
+      title: "Fetch federated TreeWiki context",
+      description: "Fetch one stable document ID from an approved binding federation. Divergent copies are returned as an explicit conflict.",
+      inputSchema: { bindingId: id, documentId: id },
+      annotations: readAnnotations
+    },
+    async ({ bindingId: bindingId2, documentId }) => response(await service.fetchWithContext(bindingId2, documentId), `Loaded federated context for ${documentId}.`)
   );
   server.registerTool(
     "get_document_history",
@@ -38483,10 +38521,68 @@ function createTreeWikiServer(service) {
     }
   );
   server.registerTool(
+    "plan_retrieval_gap",
+    {
+      title: "Plan retrieval-gap evidence",
+      description: "Plan an append-only, local retrieval-gap event without writing. The event contains no hidden document titles or content.",
+      inputSchema: {
+        bindingId: id,
+        query: external_exports.string().trim().min(1).max(500),
+        reason: gapReason,
+        workUnit: id,
+        status: gapStatus.optional(),
+        resolutionDocumentId: id.optional()
+      },
+      annotations: readAnnotations
+    },
+    async ({ bindingId: bindingId2, ...input }) => response(await service.planRetrievalGap(bindingId2, input), "Retrieval-gap plan created; nothing was recorded.", gapPlanDetails)
+  );
+  server.registerTool(
+    "record_retrieval_gap",
+    {
+      title: "Record approved retrieval-gap evidence",
+      description: "Append the exact retrieval-gap event only after separate approval of its plan ID.",
+      inputSchema: {
+        bindingId: id,
+        query: external_exports.string().trim().min(1).max(500),
+        reason: gapReason,
+        workUnit: id,
+        status: gapStatus.optional(),
+        resolutionDocumentId: id.optional(),
+        planId: hash2
+      },
+      annotations: writeAnnotations
+    },
+    async ({ bindingId: bindingId2, ...input }) => response(await service.recordRetrievalGap(bindingId2, input), "Approved retrieval-gap event recorded.")
+  );
+  server.registerTool(
+    "list_retrieval_gaps",
+    {
+      title: "List retrieval gaps",
+      description: "List the calling binding principal's folded retrieval gaps without exposing ACL-hidden documents.",
+      inputSchema: { bindingId: id, status: gapStatus.optional() },
+      annotations: readAnnotations
+    },
+    async ({ bindingId: bindingId2, status }) => {
+      const gaps = await service.retrievalGaps(bindingId2, status);
+      return response({ gaps }, `${gaps.length} retrieval gap(s).`);
+    }
+  );
+  server.registerTool(
+    "get_governance_report",
+    {
+      title: "Get knowledge governance report",
+      description: "Inspect overdue, stale-source, duplicate, and missing-replacement findings after ACL filtering.",
+      inputSchema: { bindingId: id },
+      annotations: readAnnotations
+    },
+    async ({ bindingId: bindingId2 }) => response(await service.governanceReport(bindingId2), "TreeWiki governance report loaded.")
+  );
+  server.registerTool(
     "list_l3_candidates",
     {
       title: "List L3 candidates",
-      description: "Compare proposed knowledge and persona L3 candidates.",
+      description: "Compare proposed knowledge and persona L3 candidates. Use plan_l3_review before any decision is applied.",
       inputSchema: { bindingId: id, ids: external_exports.array(id).max(50).optional() },
       annotations: readAnnotations
     },
@@ -38499,7 +38595,7 @@ function createTreeWikiServer(service) {
     "plan_l3_review",
     {
       title: "Plan L3 review",
-      description: "Create a dry-run activate, reject, or supersede plan.",
+      description: "Create a dry-run activate, reject, or supersede plan. Stop until the user separately approves the exact plan and candidate digest.",
       inputSchema: { bindingId: id, id, decision },
       annotations: readAnnotations
     },
@@ -38513,7 +38609,7 @@ function createTreeWikiServer(service) {
     "apply_l3_review",
     {
       title: "Apply approved L3 review",
-      description: "Apply a candidate decision using its exact digest and plan ID.",
+      description: "Apply a candidate decision only after separate explicit user approval, using the exact candidate digest and plan ID returned by plan_l3_review.",
       inputSchema: { bindingId: id, id, decision, candidateDigest: hash2, planId: hash2 },
       annotations: writeAnnotations
     },
@@ -38526,7 +38622,7 @@ function createTreeWikiServer(service) {
     "plan_upgrade_stage",
     {
       title: "Plan TreeWiki upgrade stage",
-      description: "Inspect one upgrade stage and return an exact plan and status digest without writing.",
+      description: "Inspect one upgrade stage and return an exact non-writing plan and status digest. Stop until the user separately approves that exact plan.",
       inputSchema: { bindingId: id, stage },
       annotations: readAnnotations
     },
@@ -38540,7 +38636,7 @@ function createTreeWikiServer(service) {
     "apply_upgrade_stage",
     {
       title: "Apply approved repository-local upgrade",
-      description: "Apply an exact safe repository-local stage. Global skill, hook, and governed-memory stages are refused.",
+      description: "After separate explicit user approval, apply the exact safe repository-local plan and status digest. Global skill, hook, and governed-memory stages are refused.",
       inputSchema: { bindingId: id, stage, planId: hash2, statusDigest: hash2 },
       annotations: writeAnnotations
     },
@@ -38617,6 +38713,15 @@ var BindingStore = class {
     const id2 = bindingId(repository, input.principal, input.team);
     const existing = current.bindings.find((item) => item.id === id2);
     if (input.action === "remove" && !existing) throw new Error(`binding does not exist: ${id2}`);
+    const overlayBindingIds = [...new Set(input.overlayBindingIds ?? [])].sort();
+    if (overlayBindingIds.includes(id2)) throw new Error("a binding cannot overlay itself");
+    for (const overlayId of overlayBindingIds) {
+      const overlay = current.bindings.find((item) => item.id === overlayId);
+      if (!overlay) throw new Error(`overlay binding does not exist: ${overlayId}`);
+      if (overlay.principal !== input.principal || overlay.team !== input.team) {
+        throw new Error("overlay bindings must use the same principal and team to prevent ACL escalation");
+      }
+    }
     const now = (/* @__PURE__ */ new Date()).toISOString();
     const binding = {
       id: id2,
@@ -38624,6 +38729,7 @@ var BindingStore = class {
       principal: input.principal,
       team: input.team,
       ...input.documentBaseUrl ? { documentBaseUrl: input.documentBaseUrl.replace(/\/$/u, "") } : {},
+      ...overlayBindingIds.length ? { overlayBindingIds } : {},
       createdAt: existing?.createdAt ?? now,
       modifiedAt: now
     };
@@ -38671,6 +38777,7 @@ var BindingStore = class {
 // src/core.ts
 var import_yaml = __toESM(require_dist2(), 1);
 import { spawn } from "node:child_process";
+import { stat as stat2 } from "node:fs/promises";
 import { delimiter, resolve as resolve3 } from "node:path";
 var TreeWikiCommandError = class extends Error {
   constructor(message, exitCode, stderr, stdout) {
@@ -38784,6 +38891,52 @@ var TreeWikiCore = class {
   async history(id2) {
     return JSON.parse(await this.run(["query", "history", this.binding.repository, "--id", id2, "--json", ...this.identityArgs()]));
   }
+  async planRetrievalGap(input) {
+    const args = [
+      "manage",
+      "retrieval-gap",
+      this.binding.repository,
+      "--query",
+      input.query,
+      "--reason",
+      input.reason,
+      "--work-unit",
+      input.workUnit,
+      "--status",
+      input.status ?? "open",
+      "--json",
+      ...this.identityArgs()
+    ];
+    if (input.resolutionDocumentId) args.splice(args.indexOf("--json"), 0, "--resolution-document-id", input.resolutionDocumentId);
+    return JSON.parse(await this.run(args));
+  }
+  async recordRetrievalGap(input) {
+    const args = [
+      "manage",
+      "retrieval-gap",
+      this.binding.repository,
+      "--query",
+      input.query,
+      "--reason",
+      input.reason,
+      "--work-unit",
+      input.workUnit,
+      "--status",
+      input.status ?? "open"
+    ];
+    if (input.resolutionDocumentId) args.push("--resolution-document-id", input.resolutionDocumentId);
+    args.push("--plan-id", input.planId, "--apply", "--json", ...this.identityArgs());
+    return JSON.parse(await this.run(args));
+  }
+  async listRetrievalGaps(status) {
+    const args = ["query", "gap-report", this.binding.repository, "--json", ...this.identityArgs()];
+    if (status) args.splice(3, 0, "--status", status);
+    const payload = JSON.parse(await this.run(args));
+    return payload.gaps ?? [];
+  }
+  async governanceReport() {
+    return JSON.parse(await this.run(["query", "governance-report", this.binding.repository, "--json", ...this.identityArgs()]));
+  }
   async listL3Candidates(ids) {
     const selected = new Set(ids ?? []);
     const documents = (await this.listDocuments()).filter((item) => item.status === "proposed" && (item.type === "memory" || item.type === "persona") && (!selected.size || selected.has(String(item.id))));
@@ -38810,10 +38963,22 @@ var TreeWikiCore = class {
     return candidates.filter((item) => item !== null).sort((a, b) => a.id.localeCompare(b.id));
   }
   async overview() {
+    const configFile = await stat2(resolve3(this.binding.repository, ".knowledge", "config.yml")).catch(() => null);
+    if (!configFile?.isFile()) {
+      return {
+        adopted: false,
+        status: "not_adopted",
+        documentCount: 0,
+        candidateCount: 0,
+        upgradeRequired: false,
+        upgrade: null
+      };
+    }
     const [documents, candidates, upgrade] = await Promise.all([this.listDocuments(), this.listL3Candidates(), this.upgradeStatus()]);
     const overall = objectValue(upgrade.overall);
     return {
-      adopted: documents.length > 0,
+      adopted: true,
+      status: "adopted",
       documentCount: documents.length,
       candidateCount: candidates.length,
       upgradeRequired: String(overall.status ?? "current") !== "current",
@@ -38916,11 +39081,61 @@ var TreeWikiService = class {
   async search(bindingId2, query) {
     return (await this.core(bindingId2)).search(query);
   }
+  async federation(bindingId2) {
+    const primary = await this.bindings.get(bindingId2);
+    const overlays = await Promise.all((primary.overlayBindingIds ?? []).map((id2) => this.bindings.get(id2)));
+    if (overlays.some((item) => item.principal !== primary.principal || item.team !== primary.team)) {
+      throw new Error("federated bindings no longer share the same ACL identity");
+    }
+    return [primary, ...overlays];
+  }
+  async federatedSearch(bindingId2, query) {
+    const bindings = await this.federation(bindingId2);
+    const batches = await Promise.all(bindings.map(async (binding) => ({ binding, hits: await (await this.core(binding.id)).search(query) })));
+    const grouped = /* @__PURE__ */ new Map();
+    for (const batch of batches) for (const hit of batch.hits) {
+      const values = grouped.get(hit.id) ?? [];
+      values.push({ bindingId: batch.binding.id, repository: batch.binding.repository, title: hit.title, url: hit.url });
+      grouped.set(hit.id, values);
+    }
+    return [...grouped.entries()].sort(([left], [right]) => left.localeCompare(right)).map(([id2, sources]) => ({
+      id: id2,
+      title: sources[0]?.title ?? id2,
+      status: sources.length > 1 ? "conflict" : "matched",
+      sources
+    }));
+  }
+  async fetchWithContext(bindingId2, documentId) {
+    const bindings = await this.federation(bindingId2);
+    const matches = [];
+    for (const binding of bindings) {
+      const core = await this.core(binding.id);
+      const listed = await core.listDocuments();
+      if (listed.some((item) => item.id === documentId)) {
+        matches.push({ bindingId: binding.id, repository: binding.repository, document: await core.fetch(documentId) });
+      }
+    }
+    if (!matches.length) throw new Error("document was not found through the ACL-approved federation");
+    const texts = new Set(matches.map((item) => JSON.stringify(item.document)));
+    return { id: documentId, status: texts.size > 1 ? "conflict" : "matched", sources: matches };
+  }
   async fetch(bindingId2, documentId) {
     return (await this.core(bindingId2)).fetch(documentId);
   }
   async history(bindingId2, documentId) {
     return (await this.core(bindingId2)).history(documentId);
+  }
+  async planRetrievalGap(bindingId2, input) {
+    return (await this.core(bindingId2)).planRetrievalGap(input);
+  }
+  async recordRetrievalGap(bindingId2, input) {
+    return (await this.core(bindingId2)).recordRetrievalGap(input);
+  }
+  async retrievalGaps(bindingId2, status) {
+    return (await this.core(bindingId2)).listRetrievalGaps(status);
+  }
+  async governanceReport(bindingId2) {
+    return (await this.core(bindingId2)).governanceReport();
   }
   async candidates(bindingId2, ids) {
     return (await this.core(bindingId2)).listL3Candidates(ids);

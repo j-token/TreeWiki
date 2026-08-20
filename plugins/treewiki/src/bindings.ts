@@ -9,6 +9,7 @@ export type Binding = {
   principal: string;
   team: string;
   documentBaseUrl?: string;
+  overlayBindingIds?: string[];
   createdAt: string;
   modifiedAt: string;
 };
@@ -18,6 +19,7 @@ export type BindingChangeInput = {
   principal: string;
   team: string;
   documentBaseUrl?: string;
+  overlayBindingIds?: string[];
 };
 export type BindingPlan = {
   schema: "treewiki.binding-plan/v1";
@@ -106,6 +108,15 @@ export class BindingStore {
     const id = bindingId(repository, input.principal, input.team);
     const existing = current.bindings.find((item) => item.id === id);
     if (input.action === "remove" && !existing) throw new Error(`binding does not exist: ${id}`);
+    const overlayBindingIds = [...new Set(input.overlayBindingIds ?? [])].sort();
+    if (overlayBindingIds.includes(id)) throw new Error("a binding cannot overlay itself");
+    for (const overlayId of overlayBindingIds) {
+      const overlay = current.bindings.find((item) => item.id === overlayId);
+      if (!overlay) throw new Error(`overlay binding does not exist: ${overlayId}`);
+      if (overlay.principal !== input.principal || overlay.team !== input.team) {
+        throw new Error("overlay bindings must use the same principal and team to prevent ACL escalation");
+      }
+    }
     const now = new Date().toISOString();
     const binding: Binding = {
       id,
@@ -113,6 +124,7 @@ export class BindingStore {
       principal: input.principal,
       team: input.team,
       ...(input.documentBaseUrl ? { documentBaseUrl: input.documentBaseUrl.replace(/\/$/u, "") } : {}),
+      ...(overlayBindingIds.length ? { overlayBindingIds } : {}),
       createdAt: existing?.createdAt ?? now,
       modifiedAt: now,
     };
