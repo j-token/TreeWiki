@@ -6,8 +6,8 @@ repository: j-token/treewiki
 source_ref: v0.2.1
 config_schema:
   minimum: 1
-  current: 4
-  maximum: 4
+  current: 5
+  maximum: 5
 compatibility:
   legacy_skill: lmwiki
   mode: removed
@@ -22,19 +22,19 @@ distribution:
 artifacts:
   files:
   - path: SKILL.md
-    sha256: 26a91cbc31a884903f6ea5aa328570cbfb4d3776494f9156fb500b90c92459ff
+    sha256: a0380e890210964bcf62d323613e2e54cc64fa72229b863ee29514d9dbc506b5
   - path: agents/openai.yaml
     sha256: 036d7ad016744b6ecf96f09eeb3dab302c5f1b87dada96ec2348ee79adec4517
   - path: assets/AGENTS.md
-    sha256: b3c61d507a325442a2c7e685a4f4c169e60739e9170959cddd3dad7257234252
+    sha256: 520e34fc424116620c837545a20805535c7b6aa1b2c3aca07c88f2decce0016a
   - path: assets/claude-alias/SKILL.md
     sha256: 80a3dbdd4d4e8559efaf68e6023d45866736be5aa92654821f356e95d1648b76
   - path: assets/config.yml
-    sha256: 72ef4c770280bb3baab5f5ab8634f597164ddfb5072f42d0d0c8d6a9e9d10c4b
+    sha256: 455c4159e526985c7c334f921d2284cbcc4cfd270e46c7e9af3bd270c0912626
   - path: assets/contract.md
-    sha256: 28582539ea3dc304d1e866c06e5c0693b47b338485217f501193efdf7dbbc5a3
+    sha256: 035a67e7070c377f120df2add5f7d220d74c37afb6ef774da4a13f220d2ed363
   - path: assets/decision.md
-    sha256: aae8a8b5c2514c799e735a97813a005d83ee3b9b238551b69aa533052a81b870
+    sha256: 826ee097eb523bc15bb2d7a58a81a49f56020ccc718b48b02c450bf41c7332ce
   - path: assets/glossary.yml
     sha256: 8f04aee791bffeddbc20b3c895628ddae2dd611c65e122dfc35856d11431207e
   - path: assets/hook-state.gitignore
@@ -42,17 +42,17 @@ artifacts:
   - path: assets/index.gitignore
     sha256: 240a3e0d37d2e86b614063f5347eb02d4f99ca6c254de6b82871ff8d95532a7d
   - path: assets/knowledge.gitignore
-    sha256: eaf5d10687fb7cca04f798a090a68f4c4031bb3a67e5a43b895444f6c1ac2744
+    sha256: 8ac75b32776dd8255eb5696acf8436e3dfdbbb928450a9eeacd87958046ed2d7
   - path: assets/l3-knowledge.md
-    sha256: ca9cf1bcde5d903dce784e1b027cef39b1c26f9aaeb8a63516f9711df05451c8
+    sha256: d444a27932597fc0f97bac4be9991c47a1e441869aba65ea7e3d87cbea561b65
   - path: assets/memory-l0.md
-    sha256: 2d57b91d8f39ad7c762dc17c838d34d5ff5447116ab0d5db575a03b73d64568b
+    sha256: a795a28ece9ec857b59671e0a02325fb3d1463efe9b58aea98bb038c81690763
   - path: assets/memory-l1.md
-    sha256: 798fd1b554f2e64f4fdf6f46c86ed4b632f9d363335e5a9991ca19e6ef2d8577
+    sha256: 2cb1912ea20aa56460f62314f8a0a562e32fcdfd4311bc090104748066418cbe
   - path: assets/memory-l2.md
-    sha256: f7774b5a43cbfe1c299328ce30317be80b055f654b8659263e5b0da405ca40bf
+    sha256: 97fd1cc1665eca9c3284c9dcbbb7b28ca87d0b9639a8c75edefad7430e75290f
   - path: assets/persona.md
-    sha256: a97347e0b5a6b815cb485fc5191032e8feb00bbe24f8a0815a6eab7e308695e1
+    sha256: f2dd1251f89c3f9e6ad741b3a4e83b136143947c440ecfe11ef7876d8d42fcf9
   - path: assets/principals.yml
     sha256: 0f65417b717203cfe703b62ad2eb2f3485519fe72f15064dced9fac17e49255f
   - path: assets/private-memory.gitignore
@@ -60,13 +60,13 @@ artifacts:
   - path: assets/purpose.md
     sha256: 34954a4a6d48c6c15a64a862caccd5992b5915f77404b7e1f64f8228a126a4db
   - path: assets/runbook.md
-    sha256: e72392c36a7ce39687961e55b8471d1803f9b76cf129f17693c019cb90d4a88d
+    sha256: d969333fdf27ac5a8ec1dc56a98353c35d1313bf2b4fc1481baee78b5b4f2dd8
   - path: assets/schema.md
     sha256: e8f75cdc2d4c72d5260bd9c7df7fd3e87b2986c99e0c0b053f53462fa1199f77
   - path: assets/skill-backups.gitignore
     sha256: 1d6b35c2897689826e66f70179c914099db12823ed6ebc19d9f1d12be5a14f93
   - path: assets/topics.yml
-    sha256: 38e097bd38eebf0702066421278b8a7fdfdf7c08862f3f0ee3959efcd957da54
+    sha256: 0347f9a657b51861ac863aceaf7ef802e18cfafb94c0c5c948773643acb65aef
   - path: references/access-control.md
     sha256: 3b1bc4bbefcdc48af1532ab8a1f94723cad0fb20faa1b123d536c4309f4c9870
   - path: references/adoption-workflow.md
@@ -76,11 +76,13 @@ artifacts:
   - path: references/agents-map.md
     sha256: 06f87cfa1db66e03e641efd47aeb2499278ce765770ac28a2f93c325f6037e1d
   - path: references/change-and-audit.md
-    sha256: f83dbe4aca0534acce2c195e2ef12339f62cc4f558879cd15cb4c9148e126a75
+    sha256: bf014eed7bf29af486e82a6dbfdb67311bd85020a2f8e88593142f21bd61af91
   - path: references/command-boundaries.md
-    sha256: 74b243d381e8954ac45f9a5b63641e4a4a8965ee8d716cc39cdf9937f4404aaf
+    sha256: 1fc0d788a6e001371c46a5646a0fcbe35fedc7528bc6e4ce70af28d42631c495
+  - path: references/document-composition.md
+    sha256: 29e4adfa9efb1d3f769be4a689c0e4207af9613ae2739c9bbc8bfaa0e13516f4
   - path: references/embedding-retrieval.md
-    sha256: ff01ecde7a6eac789d2155398ff4fdbe4f0b70039ff5ce02679c5ff0d8395cb7
+    sha256: ac5b282e015132a53fbab3597bdd7f74ba59a1b601f4b129a77a1e4e45a6042f
   - path: references/glossary.md
     sha256: 807f74f820d911a623df08e0d820dd0e47ccd01884abb81c869d403ca115e3b4
   - path: references/hook-lifecycle.md
@@ -90,45 +92,57 @@ artifacts:
   - path: references/memory-and-persona.md
     sha256: b132e0481e337e177ddba83f01c7454db82e0586e4c754baa6379ad9947f03ab
   - path: references/metadata-schema.md
-    sha256: eb850e29efce3195f44d471429d6c0469cc0894203a5fda3a3eba93d8f5849fb
+    sha256: 4bcdd32e00d5d22668a25202610a455cb54c29bbe1bc1f4a95d15ce21b0388b7
   - path: references/upgrade-guide.md
     sha256: 1a2730fd3d93f10b47a7a6215aa4cc205025ae345c967f2fe26978be707b2a55
+  - path: scripts/authoring.py
+    sha256: 1a2e24dd99598e7e2d54ae6b80ffbb92dc7f35dc8d9105647b31c0c197cb05d0
   - path: scripts/bootstrap_treewiki.py
-    sha256: 521bdc6cf7d2d5fe09bb073a4825ee9ac1f60b2ee511d96fb96da57e52798b14
+    sha256: 6190eb2c5124d644c1be8c97b1184b20510a19f1afb906ecdc15a98fcfc0da3a
   - path: scripts/build_adapter_bundles.py
-    sha256: 844eebce44566630994e29aa7d0751ed1737ffedb5f09d579050a4048d3c00fa
+    sha256: 3369cbc6e133d88f21725b3729365bb92e78a5da41c229c73d8c50343881a11d
   - path: scripts/build_embedding_index.py
     sha256: bf1c00122b8d51c04755e8769fca7f93600f949397c103f03f5018c2c06f671b
   - path: scripts/build_release_manifest.py
-    sha256: 1550ef03a04e42b77884a3cda1105c3b21abcfb36f346a39864882ecd9ad10a9
+    sha256: 31524f106dbc8cc08cd39beb5baa773173188acfcec241ee45cdba66a9fe93bb
   - path: scripts/build_search_index.py
     sha256: 75e08481995c39047868626ef56257fdd0b85036347421445ae3a4b9fe157e20
   - path: scripts/claude_alias.py
     sha256: 0c459cdded77d6e31f44a7261f8608d7cf417f7b628a918880196c085805e3ab
+  - path: scripts/code_context.py
+    sha256: 1e6bc704d45cca1614bd11308f8904af2c9d2a8bee49eb84c0fe8599406d15f3
+  - path: scripts/document_composition.py
+    sha256: 7d9869d9943380b21d43a367eaf70021a00f94381096c7d0c4de1f0407b20b3d
   - path: scripts/document_history.py
-    sha256: 69a71559a18894beb9d9d44c9795aa9361f266c5122be86ae386088061bc9b65
+    sha256: 7de2ea388322d8103b3bbb74ceb8c5a289ec81cce1bff599c0e1568fc49785f0
+  - path: scripts/governance_report.py
+    sha256: 018b8b77596cb50d4858c69554e797c44c959e53f05827d477235cb40c7b328f
   - path: scripts/install_treewiki_hooks.py
-    sha256: 8aab0ed7c70a7b3531af707d804b6774df16c22f4f5443a0e3dbb407b71dca70
+    sha256: eb362244cdc53d86d8ed044a4822349f9b389bd5c08f5c9f301f0682e953e58c
   - path: scripts/knowledge_cli.py
-    sha256: 2ae40816276e26141c3fa9133b0976184e7209e76c5942c5fb9dfd4b99bb0778
+    sha256: f1bd0ce44ca9c4fe34689239f5d31c2476b7f767ca63908f2eea82e2ad6857d0
   - path: scripts/memory_policy.py
-    sha256: d20aa3cde95d4762c16afd29aba7d6e26e4a0f82f194cf4b4b552d50713aa387
+    sha256: cbae8f9e4cec3a344e5512a2d04abcd2ea13801de1935038d1aad5fdaa31c1a3
   - path: scripts/okf_v02.py
     sha256: c5d1c7329d76d68cdfd9be37aa9fe5b3d36fc1367379c237a830fe47fef6ce44
   - path: scripts/release_manifest.py
     sha256: 1dc6c938f5569de7e37d0ff063ec5b4e31ab28e17d179ce269bd6ed0acaf0135
   - path: scripts/requirements.txt
     sha256: b4603b9468ade4d639d2c6f73b89d50e1fa5d227c73ab15be0382cca478513e6
+  - path: scripts/retrieval_gaps.py
+    sha256: 308687c8a75855a6212de1bfac9287324d428576541077f6b45087fb0ddaa399
+  - path: scripts/technical_writing.py
+    sha256: 583db976fcc99a72cfc0cc8af4d5202179c661533ceb13debf58e08ede4e430b
   - path: scripts/treewiki_hook.py
     sha256: 3c29d3e99cfb30f9ee4fd8a605775d902d57c3faadc9eafaf9acada4a6ec43ff
   - path: scripts/upgrade.py
-    sha256: bab537891968040a33f58362ce7f7e3b72be8267d035d7ff60846aae07e5dab1
+    sha256: 9350fb0c74e954d4e7c2bf9b15cbf94ab923619c3390c0fc2b7865ae4e9c5456
   - path: scripts/validate_knowledge.py
-    sha256: 30f400452f605d00ca78d9dac871ee93184bebd5f9df43f3d119cb0a6f3fff2b
+    sha256: 4525107f0a4ed7df8807df61a2ca72fd9ec3aacc5782a5528aa48d74dc3cfeea
 runtime:
   core_version: 0.2.1
-  core_hash: sha256:5934d43a29fbf34d9ce71d2feded6cb1e17674972187906305535d13fec5a20e
-  config_version: 4
+  core_hash: sha256:8c6987b0f73a1a618911f77165d7edfd09448a2d2cb6a27ea1f6d8669d5e68c8
+  config_version: 5
   memory_layout_version: 2
   history_schema: 1
 adapters:
@@ -139,7 +153,7 @@ adapters:
     marketplace: treewiki-marketplace
     mcp_transport: stdio
     runtime_bundle: plugins/treewiki/dist/treewiki-mcp.mjs
-    bundle_hash: sha256:42131cf7db49059a46406330a6cfecd98b24a533896151e03672a9b68e873f49
+    bundle_hash: sha256:a792dc5e2b5bbf61426d7064edfebee0497d8f8b4779cfade3f25359526040ae
   claude:
     kind: plugin
     entrypoint: /treewiki

@@ -143,6 +143,16 @@ class GlossaryTests(unittest.TestCase):
                 "topics: [repository-knowledge-management]\n"
                 "summary: 기억 계층을 관리한다.\nrelations: []\n"
                 "reviewed: 2026-08-04\n"
+                "governance:\n"
+                "  owner: user:owner\n"
+                "  reviewers: [user:owner]\n"
+                "  review_cadence_days: 90\n"
+                "  source_of_truth: AGENTS.md\n"
+                "  last_source_check: 2026-08-04\n"
+                "  duplicate_of: null\n"
+                "  retirement_reason: null\n"
+                "  scope: domain\n"
+                "  domain: repository\n"
                 "glossary_terms: [용어집, Memory Core]\n"
                 "---\n\n# Memory Core\n",
                 encoding="utf-8",

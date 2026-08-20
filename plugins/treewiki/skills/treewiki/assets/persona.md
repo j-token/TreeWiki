@@ -18,7 +18,7 @@ created_at: YYYY-MM-DDT00:00:00Z
 modified_at: YYYY-MM-DDT00:00:00Z
 verified_at: null
 revision: 1
-history_ref: ./PERSONA-SCOPE-001.history.jsonl
+history_ref: .knowledge/document-history/PERSONA-SCOPE-001.jsonl
 memory:
   level: l3
   subject: user:owner

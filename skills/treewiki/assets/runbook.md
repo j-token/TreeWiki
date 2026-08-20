@@ -17,7 +17,7 @@ created_at: YYYY-MM-DDT00:00:00Z
 modified_at: YYYY-MM-DDT00:00:00Z
 verified_at: null
 revision: 1
-history_ref: ./RUNBOOK-SCOPE-001.history.jsonl
+history_ref: .knowledge/document-history/RUNBOOK-SCOPE-001.jsonl
 embedding:
   mode: local_only
   content: full

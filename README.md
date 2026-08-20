@@ -6,7 +6,7 @@ TreeWiki keeps repository maps, contracts, decisions, runbooks, document history
 
 ## Release and compatibility
 
-The current TreeWiki release is **0.2.1**. The legacy `LMWiki` shim is removed, while historical IDs and provenance containing that name remain untouched. Config v4 and memory layout v2 add typed L3 knowledge/persona paths and stable-ID document-history sidecars.
+The current TreeWiki release is **0.2.1**. The legacy `LMWiki` shim is removed, while historical IDs and provenance containing that name remain untouched. Config v5 keeps detailed stable-ID document history local while preserving typed L3 knowledge/persona paths and shared lifecycle summaries.
 
 Before a mutating operation, run the read-only status check and follow its guide:
 
@@ -63,11 +63,11 @@ codex plugin marketplace add j-token/treewiki --ref v0.2.1
 codex plugin add treewiki@treewiki-marketplace
 ```
 
-Start a new Codex task and ask it to check TreeWiki for the current repository. Codex uses its native MCP tool, result, and approval surfaces to list bindings, inspect Overview, run ACL Search, read document History, review knowledge/persona L3 candidates, and plan upgrades. Binding changes, L3 decisions, and repository-local upgrades always make a dry-run plan first and apply only after explicit approval with the exact plan ID and digest. Global skills, hooks, and governed-memory upgrades remain chat-guided operations.
+Start a new Codex task and ask it to check TreeWiki for the current repository. Codex uses native MCP tool, result, and approval surfaces to list bindings, run ACL search, read document history, review knowledge/persona L3 candidates, and plan upgrades. Binding changes, L3 decisions, and repository-local upgrades always make a dry-run plan first and apply only after explicit approval with the exact plan ID and digest.
 
 The committed stdio MCP, Python core, PyYAML runtime, and skill need neither `npm install` nor `pip install` after installation. Repository tools accept only an approved `bindingId`; callers cannot replace the repository or ACL identity per request. See [`plugins/treewiki/README.md`](plugins/treewiki/README.md).
 
-The optional HTTP transport exposes the same plain MCP tools without a custom App resource. Tunnels and Developer mode are development/deployment concerns documented separately in [`docs/chatgpt-http-development.md`](docs/chatgpt-http-development.md); they are not the Codex installation path.
+The optional HTTP transport exposes the same native MCP tools. Tunnels and Developer mode are development/deployment concerns documented separately in [`docs/chatgpt-http-development.md`](docs/chatgpt-http-development.md); they are not the Codex installation path.
 
 ```text
 Use $treewiki to adopt this repository and preserve its existing documentation.
@@ -90,7 +90,7 @@ TreeWiki supports exact and convergent evidence. Facts need one authoritative so
 
 ## Document model
 
-TreeWiki uses typed Markdown with stable IDs. Managed documents carry `created_at`, `modified_at`, `verified_at`, `revision`, and `history_ref`; the adjacent `<stable-id>.history.jsonl` ledger records semantic changes. Source verification changes `verified_at` without increasing the semantic revision. Markdown/frontmatter and ledgers remain authoritative; indexes are recreatable derivatives.
+TreeWiki uses typed Markdown with stable IDs. Managed documents share `created_at`, `modified_at`, `verified_at`, `revision`, and a local `history_ref`. Detailed actor, plan, reason, and hash-chain events stay under ignored `.knowledge/document-history/`; Git provides the shared change history. Source verification changes `verified_at` without increasing the semantic revision. Indexes remain recreatable derivatives.
 
 OKF v0.2 is an import/export compatibility layer, not TreeWiki's native storage schema. Export maps lifecycle timestamps, verification events, evidence sources, and TreeWiki status without discarding the native metadata extension.
 
@@ -108,6 +108,19 @@ python skills/treewiki/scripts/knowledge_cli.py manage validate <repository-root
 ```
 
 Initial setup asks once whether to enable local embeddings and SQLite BM25. No document is sent externally without explicit permission. GitHub latest-release checks are opt-in and default to offline/unknown.
+
+## Knowledge-system automation
+
+Technical documents use typed templates (`how_to`, `reference`, `explanation`, `tutorial`, `troubleshooting`, and `api_contract`) plus `context` and `governance` metadata. Every authoring operation is planned first and creates only a reviewed `draft`.
+
+```powershell
+python skills/treewiki/scripts/knowledge_cli.py manage scaffold <repository-root> how_to --id HOWTO-001 --title "Deploy safely" --output docs/references/deploy.md --source-path src/deploy.py --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py generate-context <repository-root> --commit HEAD --path src/deploy.py --symbol deploy --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py query gap-report <repository-root> --status open --principal user:owner --team team:product
+python skills/treewiki/scripts/knowledge_cli.py query governance-report <repository-root> --principal user:owner --team team:product
+```
+
+Native MCP adds same-identity federated search, contextual fetch, retrieval-gap plan/apply tools, and a governance report. Duplicate stable IDs are reported as conflicts; federation never merges them or broadens ACL identity.
 
 ## Upgrade guide
 

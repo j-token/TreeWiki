@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { resolve } from "node:path";
 import { test } from "node:test";
 import { parseJsonLines, parseMarkdownDocument, TreeWikiCore, type CommandExecutor } from "../src/core.js";
 import type { Binding } from "../src/bindings.js";
@@ -27,4 +30,37 @@ test("global and memory upgrade stages are never applyable through native MCP to
   assert.equal(runtime.schema,"treewiki.upgrade-plan/v1");
   assert.equal(runtime.applyAllowed,false);
   assert.equal((await core.planUpgradeStage("memory-layout")).applyAllowed,false);
+});
+
+test("retrieval-gap apply forwards the exact approved plan and binding identity", async () => {
+  const calls:string[][]=[]; const executor:CommandExecutor=async(_program,args)=>{calls.push(args);return {exitCode:0,stderr:"",stdout:"{}"}};
+  const core=new TreeWikiCore(config,binding,executor); const planId=`sha256:${"e".repeat(64)}`;
+  await core.recordRetrievalGap({query:"missing policy",reason:"no_result",workUnit:"work-1",planId});
+  assert.ok(calls[0].includes(planId));
+  assert.ok(calls[0].includes("--apply"));
+  assert.deepEqual(calls[0].slice(-4),["--principal","user:test","--team","team:repo"]);
+});
+
+test("overview returns a native not-adopted state without invoking the CLI", async () => {
+  const repository = await mkdtemp(resolve(tmpdir(), "treewiki-native-overview-"));
+  let calls = 0;
+  const executor: CommandExecutor = async () => {
+    calls += 1;
+    return { exitCode: 1, stderr: "must not run", stdout: "" };
+  };
+  const unadoptedBinding: Binding = { ...binding, repository };
+  try {
+    const overview = await new TreeWikiCore(config, unadoptedBinding, executor).overview();
+    assert.deepEqual(overview, {
+      adopted: false,
+      status: "not_adopted",
+      documentCount: 0,
+      candidateCount: 0,
+      upgradeRequired: false,
+      upgrade: null,
+    });
+    assert.equal(calls, 0);
+  } finally {
+    await rm(repository, { recursive: true, force: true });
+  }
 });

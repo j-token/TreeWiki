@@ -16,7 +16,7 @@ CLI = ROOT / "skills" / "treewiki" / "scripts" / "knowledge_cli.py"
 
 
 class KnowledgeCliTests(unittest.TestCase):
-    def write_config(self, root: Path, *, version: int = 4) -> None:
+    def write_config(self, root: Path, *, version: int = 5) -> None:
         (root / ".knowledge").mkdir(parents=True, exist_ok=True)
         vocabulary_dir = root / "docs" / "vocabulary"
         vocabulary_dir.mkdir(parents=True, exist_ok=True)
@@ -66,7 +66,12 @@ class KnowledgeCliTests(unittest.TestCase):
                 "knowledge_path": "docs/memory/l3/knowledge",
                 "persona_path": "docs/memory/l3/persona",
             }
-            config["history"] = {"schema": 1, "sidecar": "stable-id"}
+            config["history"] = {
+                "schema": 1,
+                "storage": "local",
+                "path": ".knowledge/document-history",
+                "enforce": True,
+            }
         (root / ".knowledge" / "config.yml").write_text(
             yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8"
         )
@@ -528,6 +533,60 @@ class KnowledgeCliTests(unittest.TestCase):
             self.assertEqual(result.returncode, 6, result.stdout + result.stderr)
             self.assertEqual(json.loads(result.stdout)["error"]["code"], "STALE_PLAN")
 
+    def test_l3_committee_votes_accumulate_until_quorum(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            self.write_config(root)
+            config_path = root / ".knowledge" / "config.yml"
+            config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+            config["access_control"]["managers"] = ["user:owner", "user:reviewer"]
+            config["governance"] = {
+                "required": False,
+                "domain_committees": {
+                    "repository": {"managers": ["user:owner", "user:reviewer"], "quorum": 2}
+                },
+            }
+            config_path.write_text(yaml.safe_dump(config, sort_keys=False), encoding="utf-8")
+            first = self.write_shared_memory(root, "MEMORY-L1-QA", scope="repo", work="one", source="one")
+            second = self.write_shared_memory(root, "MEMORY-L1-QB", scope="repo", work="two", source="two")
+            digest = self.evidence_digest([first, second])
+            proposal = self.write_shared_memory(
+                root, "MEMORY-L3-QUORUM", level="l3", scope="repo", status="proposed",
+                work="quorum", source="quorum", evidence_digest=digest,
+                relations=[
+                    {"type": "distilled_from", "target": first["id"]},
+                    {"type": "distilled_from", "target": second["id"]},
+                ],
+            )
+            target = root / "docs" / "memory" / "l3" / "memory-l3-quorum.md"
+
+            def vote(principal: str) -> dict:
+                identity = ("--principal", principal, "--team", "team:repo")
+                planned = self.run_cli(
+                    "manage", "l3-review", str(root), proposal["id"], "--candidate-digest", digest,
+                    "--decision", "approve", "--json", *identity,
+                )
+                self.assertEqual(planned.returncode, 0, planned.stdout + planned.stderr)
+                plan = json.loads(planned.stdout)
+                applied = self.run_cli(
+                    "manage", "l3-review", str(root), proposal["id"], "--candidate-digest", digest,
+                    "--decision", "approve", "--plan-id", plan["plan_id"], "--apply", "--json", *identity,
+                )
+                self.assertEqual(applied.returncode, 0, applied.stdout + applied.stderr)
+                return plan
+
+            first_plan = vote("user:owner")
+            self.assertFalse(first_plan["quorum_met"])
+            metadata = yaml.safe_load(target.read_text(encoding="utf-8").split("---")[1])
+            self.assertEqual(metadata["status"], "proposed")
+            self.assertEqual(metadata["sharing"]["approval_votes"], ["user:owner"])
+
+            second_plan = vote("user:reviewer")
+            self.assertTrue(second_plan["quorum_met"])
+            metadata = yaml.safe_load(target.read_text(encoding="utf-8").split("---")[1])
+            self.assertEqual(metadata["status"], "active")
+            self.assertEqual(metadata["sharing"]["approved_by"], ["user:owner", "user:reviewer"])
+
     def test_l3_review_blocks_one_evidence_but_reject_records_nonapproval_audit(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -687,7 +746,7 @@ class KnowledgeCliTests(unittest.TestCase):
                 "--principal", "user:owner", "--team", "team:repo",
             )
             self.assertEqual(result.returncode, 3, result.stdout + result.stderr)
-            self.assertIn("requires config v4/layout 2", result.stderr)
+            self.assertIn("requires config v5/layout 2", result.stderr)
 
 
 if __name__ == "__main__":

@@ -76,7 +76,7 @@ def build_manifest_data(
             "source_ref": source_ref or f"v{release}",
         }
     )
-    payload["config_schema"] = {"minimum": 1, "current": 4, "maximum": 4}
+    payload["config_schema"] = {"minimum": 1, "current": 5, "maximum": 5}
     payload["compatibility"] = {
         "legacy_skill": "lmwiki",
         "mode": "removed" if compare_semver(release, "0.2.0") >= 0 else "warning-shim",
@@ -92,7 +92,7 @@ def build_manifest_data(
                 if (skill_root / "scripts" / name).is_file()
             }
         ),
-        "config_version": 4,
+        "config_version": 5,
         "memory_layout_version": 2,
         "history_schema": 1,
     }

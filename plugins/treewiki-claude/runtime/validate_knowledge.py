@@ -27,13 +27,17 @@ from memory_policy import (
 from document_history import (
     DocumentHistoryError,
     history_path_for,
+    history_ref_for,
     parse_document as parse_history_document,
     read_history,
     semantic_components,
 )
+from document_composition import composition_limits, document_composition_messages
+from technical_writing import TECHNICAL_DOCUMENT_TYPES, technical_document_messages
 
 
 DEFAULT_INCLUDES = ["AGENTS.md", "**/AGENTS.md", "docs/**/*.md"]
+OPERATIONAL_EXCLUDES = [".agents/skills/.treewiki-backups/**"]
 REQUIRED_FIELDS = {
     "id",
     "title",
@@ -46,7 +50,10 @@ REQUIRED_FIELDS = {
     "reviewed",
 }
 SCOPED_TYPES = {"map", "contract", "runbook"}
-ALLOWED_TYPES = {"map", "contract", "decision", "runbook", "concept", "reference", "memory", "persona"}
+ALLOWED_TYPES = {
+    "map", "contract", "decision", "runbook", "concept", "reference", "memory", "persona",
+    *TECHNICAL_DOCUMENT_TYPES,
+}
 ALLOWED_STATUSES = {"draft", "active", "deprecated", "archived"}
 ALLOWED_AUTHORITIES = {"normative", "informative", "generated"}
 ALLOWED_RELATIONS = {
@@ -64,6 +71,8 @@ ALLOWED_MEMORY_KINDS = {"fact", "preference", "conditional-action", "constraint"
 ALLOWED_VISIBILITIES = {"private", "team", "restricted", "agent"}
 ALLOWED_PERMISSIONS = {"read", "write", "manage"}
 SUBJECT_RE = re.compile(r"^(user|role|agent|team):[^:\s]+$")
+SHA256_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+COMMIT_RE = re.compile(r"^[0-9a-f]{40,64}$")
 LINK_RE = re.compile(r"\[[^]]+\]\(([^)]+)\)")
 FRONTMATTER_RE = re.compile(r"\A---\s*\r?\n(.*?)\r?\n---\s*(?:\r?\n|\Z)", re.DOTALL)
 
@@ -116,7 +125,10 @@ def managed_documents(root: Path, config: dict[str, Any]) -> list[Path]:
     for pattern in includes:
         found.update(path for path in root.glob(pattern) if path.is_file())
     return sorted(
-        path for path in found if not matches_any(relative_posix(path, root), excludes)
+        path
+        for path in found
+        if not matches_any(relative_posix(path, root), excludes)
+        and not matches_any(relative_posix(path, root), OPERATIONAL_EXCLUDES)
     )
 
 
@@ -129,7 +141,10 @@ def resolve_date(value: Any) -> date | None:
         try:
             return date.fromisoformat(value)
         except ValueError:
-            return None
+            try:
+                return datetime.fromisoformat(value.replace("Z", "+00:00")).date()
+            except ValueError:
+                return None
     return None
 
 
@@ -219,6 +234,9 @@ def main() -> int:
 
     records: dict[str, tuple[Path, dict[str, Any]]] = {}
     parsed: list[tuple[Path, dict[str, Any], str]] = []
+    documents_config = config.get("documents") if isinstance(config.get("documents"), dict) else {}
+    composition, composition_errors = composition_limits(documents_config)
+    errors.extend(f".knowledge/config.yml: {message}" for message in composition_errors)
     review_days = int(config.get("review_warning_days", 180))
     memory_config = config.get("memory") if isinstance(config.get("memory"), dict) else {}
     private_memory_path = str(memory_config.get("private_path", ".knowledge/private-memory")).rstrip("/")
@@ -339,6 +357,42 @@ def main() -> int:
     ):
         errors.append(".knowledge/config.yml: retrieval.graph_hops must be an integer from 0 to 3")
 
+    gap_path = retrieval.get("gap_ledger_path", ".knowledge/index/retrieval-gaps.jsonl")
+    normalized_gap_path = str(gap_path).replace("\\", "/")
+    if (
+        not isinstance(gap_path, str)
+        or Path(normalized_gap_path).is_absolute()
+        or ".." in Path(normalized_gap_path).parts
+        or not normalized_gap_path.startswith(".knowledge/index/")
+    ):
+        errors.append(".knowledge/config.yml: retrieval.gap_ledger_path must stay under .knowledge/index/")
+
+    governance_config = config.get("governance") if isinstance(config.get("governance"), dict) else {}
+    governance_required = governance_config.get("required", False)
+    if not isinstance(governance_required, bool):
+        errors.append(".knowledge/config.yml: governance.required must be a boolean")
+    committees: dict[str, dict[str, Any]] = {}
+    standards = governance_config.get("standards_committee")
+    if isinstance(standards, dict):
+        committees["standards"] = standards
+    domains = governance_config.get("domain_committees")
+    if isinstance(domains, dict):
+        for domain_name, committee in domains.items():
+            if isinstance(committee, dict):
+                committees[f"domain:{domain_name}"] = committee
+            else:
+                errors.append(f".knowledge/config.yml: domain committee {domain_name!r} must be a mapping")
+    for committee_name, committee in committees.items():
+        committee_managers = committee.get("managers")
+        quorum = committee.get("quorum")
+        if not isinstance(committee_managers, list) or not committee_managers:
+            errors.append(f".knowledge/config.yml: governance committee {committee_name} requires managers")
+            continue
+        if any(not isinstance(manager, str) or not SUBJECT_RE.match(manager) for manager in committee_managers):
+            errors.append(f".knowledge/config.yml: governance committee {committee_name} has invalid manager")
+        if not isinstance(quorum, int) or isinstance(quorum, bool) or quorum < 1 or quorum > len(committee_managers):
+            errors.append(f".knowledge/config.yml: governance committee {committee_name} has invalid quorum")
+
     for path in documents:
         rel = relative_posix(path, root)
         try:
@@ -365,6 +419,14 @@ def main() -> int:
         doc_type = metadata.get("type")
         if doc_type not in ALLOWED_TYPES:
             errors.append(f"{rel}: invalid type {doc_type!r}")
+        technical_errors, technical_warnings = technical_document_messages(metadata, body)
+        errors.extend(f"{rel}: {message}" for message in technical_errors)
+        warnings.extend(f"{rel}: {message}" for message in technical_warnings)
+        composition_errors, composition_warnings = document_composition_messages(
+            metadata, body, limits=composition
+        )
+        errors.extend(f"{rel}: {message}" for message in composition_errors)
+        warnings.extend(f"{rel}: {message}" for message in composition_warnings)
         history_config = config.get("history") if isinstance(config.get("history"), dict) else {}
         enforce_history = bool(history_config.get("enforce", False))
         if (
@@ -379,19 +441,17 @@ def main() -> int:
             revision = metadata.get("revision")
             if not isinstance(revision, int) or isinstance(revision, bool) or revision < 1:
                 errors.append(f"{rel}: revision must be a positive integer")
-            expected_history = f"./{doc_id}.history.jsonl"
+            expected_history = history_ref_for(doc_id)
             if metadata.get("history_ref") != expected_history:
                 errors.append(f"{rel}: history_ref must be {expected_history}")
             for field in ("created_at", "modified_at", "verified_at"):
                 value = metadata.get(field)
                 if value is not None and not isinstance(value, (str, date, datetime)):
                     errors.append(f"{rel}: {field} must be an ISO-8601 value or null")
-            sidecar = history_path_for(path, doc_id)
+            sidecar = history_path_for(root, doc_id)
             try:
                 history_events = read_history(sidecar)
-                if not history_events:
-                    errors.append(f"{rel}: lifecycle history sidecar is missing or empty")
-                else:
+                if history_events:
                     latest = history_events[-1]
                     _, history_body, _ = parse_history_document(path)
                     components = semantic_components(metadata, history_body)
@@ -477,6 +537,72 @@ def main() -> int:
                     if not isinstance(source_path, str) or not source_path:
                         errors.append(f"{rel}: provenance[{source_index}] requires source or path")
 
+        context = metadata.get("context")
+        if context is not None:
+            if not isinstance(context, dict):
+                errors.append(f"{rel}: context must be a mapping")
+            else:
+                audience = context.get("audience")
+                if not isinstance(audience, list) or not audience or any(item not in {"human", "agent"} for item in audience):
+                    errors.append(f"{rel}: context.audience must contain human and/or agent")
+                repository = context.get("repository")
+                if not isinstance(repository, str) or not repository.startswith("repo:"):
+                    errors.append(f"{rel}: context.repository must use repo:<id> syntax")
+                source_commit = context.get("source_commit")
+                if source_commit is not None and (not isinstance(source_commit, str) or not COMMIT_RE.match(source_commit)):
+                    errors.append(f"{rel}: context.source_commit must be a full hexadecimal commit SHA")
+                source_paths = context.get("source_paths")
+                if not isinstance(source_paths, list) or not source_paths or any(not isinstance(item, str) or not item for item in source_paths):
+                    errors.append(f"{rel}: context.source_paths must be a non-empty string array")
+                else:
+                    for source_path in source_paths:
+                        if not path_exists(root, source_path):
+                            warnings.append(f"{rel}: context source path not present in working tree: {source_path}")
+                symbols = context.get("symbols", [])
+                if not isinstance(symbols, list) or any(not isinstance(item, str) or not item for item in symbols):
+                    errors.append(f"{rel}: context.symbols must be a string array")
+                generated = context.get("generated")
+                if not isinstance(generated, bool):
+                    errors.append(f"{rel}: context.generated must be a boolean")
+                generator = context.get("generator")
+                if generated is True and (not isinstance(generator, str) or not generator):
+                    errors.append(f"{rel}: generated context requires context.generator")
+                digest = context.get("source_digest")
+                if digest is not None and (not isinstance(digest, str) or not SHA256_RE.match(digest)):
+                    errors.append(f"{rel}: context.source_digest must use sha256:<digest>")
+
+        governance = metadata.get("governance")
+        requires_governance = bool(governance_required and doc_type not in {"memory", "persona"})
+        if governance is None and requires_governance:
+            errors.append(f"{rel}: governance metadata is required")
+        elif governance is not None:
+            if not isinstance(governance, dict):
+                errors.append(f"{rel}: governance must be a mapping")
+            else:
+                owner = governance.get("owner")
+                reviewers = governance.get("reviewers")
+                cadence = governance.get("review_cadence_days")
+                if not isinstance(owner, str) or not SUBJECT_RE.match(owner):
+                    errors.append(f"{rel}: governance.owner must be a principal")
+                if not isinstance(reviewers, list) or not reviewers or any(not isinstance(item, str) or not SUBJECT_RE.match(item) for item in reviewers):
+                    errors.append(f"{rel}: governance.reviewers must be a non-empty principal array")
+                if not isinstance(cadence, int) or isinstance(cadence, bool) or cadence < 1:
+                    errors.append(f"{rel}: governance.review_cadence_days must be a positive integer")
+                if not isinstance(governance.get("source_of_truth"), str) or not governance.get("source_of_truth"):
+                    errors.append(f"{rel}: governance.source_of_truth must be a non-empty string")
+                if resolve_date(governance.get("last_source_check")) is None:
+                    errors.append(f"{rel}: governance.last_source_check must be an ISO date or timestamp")
+                duplicate_of = governance.get("duplicate_of")
+                if duplicate_of is not None and (not isinstance(duplicate_of, str) or not duplicate_of):
+                    errors.append(f"{rel}: governance.duplicate_of must be null or a document ID")
+                scope = governance.get("scope")
+                if scope not in {"standards", "domain"}:
+                    errors.append(f"{rel}: governance.scope must be standards or domain")
+                if scope == "domain" and (not isinstance(governance.get("domain"), str) or not governance.get("domain")):
+                    errors.append(f"{rel}: domain governance requires governance.domain")
+                if metadata.get("status") in {"deprecated", "archived"} and not governance.get("retirement_reason"):
+                    errors.append(f"{rel}: inactive governed document requires governance.retirement_reason")
+
         if doc_type in {"memory", "persona"}:
             memory = metadata.get("memory")
             if not isinstance(memory, dict):
@@ -549,6 +675,20 @@ def main() -> int:
         doc_id: {"path": relative_posix(path, root), "metadata": metadata}
         for doc_id, (path, metadata) in records.items()
     }
+    inbound_supersedes: dict[str, list[str]] = {}
+    normalized_bodies: dict[str, list[str]] = {}
+    for path, metadata, body in parsed:
+        doc_id = metadata.get("id")
+        if isinstance(doc_id, str):
+            normalized = re.sub(r"\s+", " ", body).strip().casefold()
+            if normalized:
+                normalized_bodies.setdefault(normalized, []).append(doc_id)
+        relations = metadata.get("relations")
+        if isinstance(relations, list) and isinstance(doc_id, str):
+            for relation in relations:
+                if isinstance(relation, dict) and relation.get("type") == "supersedes" and isinstance(relation.get("target"), str):
+                    inbound_supersedes.setdefault(str(relation["target"]), []).append(doc_id)
+
     for path, metadata, body in parsed:
         rel = relative_posix(path, root)
         relations = metadata.get("relations", [])
@@ -583,6 +723,20 @@ def main() -> int:
 
         if metadata.get("type") == "contract" and metadata.get("status") == "active" and not verified:
             errors.append(f"{rel}: active contract requires at least one verified_by relation")
+
+        governance = metadata.get("governance") if isinstance(metadata.get("governance"), dict) else {}
+        duplicate_of = governance.get("duplicate_of")
+        if isinstance(duplicate_of, str):
+            if duplicate_of == metadata.get("id"):
+                errors.append(f"{rel}: governance.duplicate_of cannot reference itself")
+            elif duplicate_of not in records:
+                errors.append(f"{rel}: governance.duplicate_of target {duplicate_of!r} not found")
+        replacements = inbound_supersedes.get(str(metadata.get("id")), [])
+        if metadata.get("status") == "deprecated" and not any(
+            replacement in records and records[replacement][1].get("status") == "active"
+            for replacement in replacements
+        ):
+            errors.append(f"{rel}: deprecated document requires an active replacement with a supersedes relation")
 
         memory = metadata.get("memory") if isinstance(metadata.get("memory"), dict) else {}
         level = memory.get("level")
@@ -619,6 +773,16 @@ def main() -> int:
                     continue
                 if not (path.parent / target).resolve().exists():
                     errors.append(f"{rel}: broken local link {raw_target!r}")
+
+    for duplicate_ids in normalized_bodies.values():
+        if len(duplicate_ids) < 2:
+            continue
+        canonical = sorted(duplicate_ids)[0]
+        for duplicate_id in sorted(duplicate_ids)[1:]:
+            duplicate_metadata = records[duplicate_id][1]
+            governance = duplicate_metadata.get("governance") if isinstance(duplicate_metadata.get("governance"), dict) else {}
+            if governance.get("duplicate_of") != canonical:
+                warnings.append(f"{relative_posix(records[duplicate_id][0], root)}: semantic duplicate candidate of {canonical}")
 
     for message in errors:
         print(f"ERROR {message}")

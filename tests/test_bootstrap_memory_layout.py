@@ -23,7 +23,7 @@ class BootstrapMemoryLayoutTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def test_fresh_bootstrap_uses_v4_l0_private_and_typed_shared_l3(self) -> None:
+    def test_fresh_bootstrap_uses_v5_local_history_and_typed_shared_l3(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
             result = self.bootstrap(repository)
@@ -32,7 +32,7 @@ class BootstrapMemoryLayoutTests(unittest.TestCase):
             config = yaml.safe_load(
                 (repository / ".knowledge" / "config.yml").read_text(encoding="utf-8")
             )
-            self.assertEqual(config["version"], 4)
+            self.assertEqual(config["version"], 5)
             self.assertEqual(config["memory"]["layout_version"], 2)
             self.assertEqual(config["memory"]["private_path"], ".knowledge/private-memory")
             self.assertEqual(config["memory"]["shared_path"], "docs/memory")
@@ -46,7 +46,8 @@ class BootstrapMemoryLayoutTests(unittest.TestCase):
             self.assertTrue((repository / "docs" / "memory" / "l3" / "knowledge").is_dir())
             self.assertTrue((repository / "docs" / "memory" / "l3" / "persona").is_dir())
             self.assertEqual(config["history"]["enforce"], True)
-            self.assertTrue((repository / "MAP-ROOT-001.history.jsonl").is_file())
+            self.assertTrue((repository / ".knowledge" / "document-history" / "MAP-ROOT-001.jsonl").is_file())
+            self.assertFalse((repository / "MAP-ROOT-001.history.jsonl").exists())
             self.assertEqual(
                 (repository / ".knowledge" / "private-memory" / ".gitignore").read_text(
                     encoding="utf-8"
@@ -55,7 +56,7 @@ class BootstrapMemoryLayoutTests(unittest.TestCase):
             )
             self.assertEqual(
                 (repository / ".knowledge" / ".gitignore").read_text(encoding="utf-8"),
-                "/upgrade-backups/\n/document-backups/\n",
+                "/upgrade-backups/\n/document-backups/\n/document-history/\n",
             )
             self.assertEqual(
                 (repository / ".agents" / "skills" / ".gitignore").read_text(
@@ -64,7 +65,7 @@ class BootstrapMemoryLayoutTests(unittest.TestCase):
                 "/.treewiki-backups/\n",
             )
 
-    def test_repeated_bootstrap_preserves_the_v4_config(self) -> None:
+    def test_repeated_bootstrap_preserves_the_v5_config(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             repository = Path(temporary)
             first = self.bootstrap(repository)
@@ -76,6 +77,19 @@ class BootstrapMemoryLayoutTests(unittest.TestCase):
             self.assertEqual(second.returncode, 0, second.stdout + second.stderr)
             self.assertIn("SKIPPED", second.stdout)
             self.assertEqual(config_path.read_text(encoding="utf-8"), before)
+
+    def test_bootstrap_finalizes_only_documents_created_by_bootstrap(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            repository = Path(temporary)
+            unmanaged = repository / "docs" / "notes.md"
+            unmanaged.parent.mkdir(parents=True)
+            unmanaged.write_text("# Existing untyped notes\n", encoding="utf-8")
+
+            result = self.bootstrap(repository)
+
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertEqual(unmanaged.read_text(encoding="utf-8"), "# Existing untyped notes\n")
+            self.assertTrue((repository / ".knowledge" / "document-history" / "MAP-ROOT-001.jsonl").is_file())
 
     def test_git_ignores_only_l0_and_transaction_backups(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
