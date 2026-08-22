@@ -1,14 +1,23 @@
-# TreeWiki Agent Plugin
+# TreeWiki Agent Plugin 0.3.0
 
-This directory is the portable TreeWiki 0.2.1 distribution. `plugin.json` and
-`mcp.json` follow Agent Plugins 1.0.0. Codex reads the compatibility metadata in
-`.codex-plugin/plugin.json` and its `.mcp.json` bridge; both configurations launch
-the same bundled stdio MCP server.
+This directory is the canonical TreeWiki package. It contains the portable Agent Plugin manifest, Codex compatibility metadata, the TreeWiki skill, the Python SQLite/BM25 core, and six native MCP tools.
 
-The committed `dist/treewiki-mcp.mjs`, canonical skill, Python core, and vendored
-PyYAML runtime allow installation without `npm install` or `pip install`. Codex
-uses its standard tool, result, and approval surfaces. `npm run build` is only for
-maintainers rebuilding the release.
+## MCP tools
 
-Optional remote validation uses `npm run start:http`. It is not the default Codex
-installation path and still stores bindings beneath `PLUGIN_DATA`.
+- `connect_workspace`
+- `get_status`
+- `search`
+- `read`
+- `get_history`
+- `validate`
+
+The skill supplies the current repository path once and reuses the returned `workspaceId`. Search may rebuild only the derived `.knowledge/index/` cache. External source URLs remain citations and are not fetched.
+
+## Build
+
+```powershell
+npm run check
+npm run build:claude
+```
+
+The Claude runtime and route skill are generated from this package. Do not publish or maintain `skills/treewiki` as a standalone distribution.

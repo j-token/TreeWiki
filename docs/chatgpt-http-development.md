@@ -12,4 +12,4 @@ npm run start:http
 
 The endpoint is `http://127.0.0.1:8787/mcp`. A remote host requires an approved HTTPS deployment or secure tunnel and its own authentication controls. Do not expose the development server directly to the public internet. Configure the host's Developer mode with the HTTPS `/mcp` URL and refresh it when tool metadata changes.
 
-Bindings remain server-side under `PLUGIN_DATA`; tools accept `bindingId`, not a repository path or ACL identity. HTTP transport does not weaken the two-step plan and apply checks for binding, L3, or upgrade writes.
+Workspace connections remain server-side under `PLUGIN_DATA`. Call `connect_workspace` once with the host's current repository, then pass only its `workspaceId` to status, search, read, history, and validation tools. Search may refresh the local derived index; the HTTP server never fetches external citation URLs.

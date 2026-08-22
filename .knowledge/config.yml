@@ -1,0 +1,22 @@
+schema: treewiki/0.3
+documents:
+  include:
+  - AGENTS.md
+  - '**/AGENTS.md'
+  - docs/policies/*.md
+  - docs/policies/**/*.md
+  - docs/decisions/*.md
+  - docs/decisions/**/*.md
+  exclude:
+  - .agents/**
+  - .knowledge/**
+  - .knowledge-v0.2-archive-*/**
+  - '**/node_modules/**'
+  - '**/dist/**'
+  - plugins/**/skills/**/assets/**
+  - plugins/treewiki-claude/runtime/**
+body_line_target: 50
+history_path: .knowledge/document-history
+index_path: .knowledge/index/search.db
+search_result_limit: 12
+graph_hops: 1

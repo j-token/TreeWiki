@@ -1,0 +1,17 @@
+{
+  "schema": "treewiki.release/v1",
+  "version": "0.3.0",
+  "files": {
+    "plugins/treewiki/plugin.json": "sha256:00057029189bd0805e5c5015bfd579909d3f460c52ded7e07717362f25aa257b",
+    "plugins/treewiki/.codex-plugin/plugin.json": "sha256:308a848e9199ffca4a510cd089094b4aaa1db5c1c7d1c42810d0b22884ed417d",
+    "plugins/treewiki/package.json": "sha256:0060a84b728aca1627cc41f036ab8cfc988847f0f687a86449f251418427ad1a",
+    "plugins/treewiki/package-lock.json": "sha256:9ca262618e91dd5f065013d957f9f8072d93e4c7e374e3f9d9a348fed2d29277",
+    "plugins/treewiki/skills/treewiki/SKILL.md": "sha256:33ebbd9abaeea00829ec2329d523ee8c1b3e72d526c7b2b1e747fbf3410dd045",
+    "plugins/treewiki/skills/treewiki/scripts/treewiki_cli.py": "sha256:cf8a4054193b9ad3d8c2da4a343bef6073d4930f6cf617fd38df46ebcc5bf103",
+    "plugins/treewiki/skills/treewiki/scripts/treewiki_core.py": "sha256:7a8b147ee93122366ca086726b432c47da5cc4a9113674d9e54c77c4812f62b0",
+    "plugins/treewiki/dist/treewiki-mcp.mjs": "sha256:240ddf4cbbaed9f4a6a24242346af790059dac83b5cfc5ee4c20bc95ca99b66c",
+    "plugins/treewiki-claude/.claude-plugin/plugin.json": "sha256:3a2505c0ef429a774fd8138d6e6833d1418cc81eeb73ee527fe5857ec8c4574b",
+    "plugins/treewiki-claude/skills/route/SKILL.md": "sha256:32c505a20cfc0f95c6d299bc2a19217184292f45d4677b517c33995974c2cd4f",
+    "plugins/treewiki-claude/runtime/runtime-manifest.json": "sha256:ce28340a1a08b97fcb76dd399ec233405723cd5403ae7fcf98168d50b3e2ee36"
+  }
+}

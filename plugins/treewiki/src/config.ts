@@ -25,8 +25,8 @@ export function loadConfig(pluginRoot = resolvePluginRoot()): PluginRuntimeConfi
       resolve(pluginRoot, ".treewiki-plugin-data"),
   );
   const runtimeDirectory = resolve(pluginRoot, "skills", "treewiki", "scripts");
-  if (!existsSync(resolve(runtimeDirectory, "knowledge_cli.py"))) {
-    throw new Error("bundled TreeWiki runtime is missing; rebuild the adapter bundles");
+  if (!existsSync(resolve(runtimeDirectory, "treewiki_cli.py"))) {
+    throw new Error("bundled TreeWiki 0.3 runtime is missing");
   }
   const port = Number(process.env.PORT ?? "8787");
   if (!Number.isInteger(port) || port < 1 || port > 65535) {

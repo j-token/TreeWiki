@@ -1,85 +1,45 @@
 ---
 id: MAP-ROOT-001
-title: TreeWiki repository maintenance map
 type: map
-status: active
-authority: normative
-topics:
-- repository-knowledge-management
-summary: Maps canonical TreeWiki sources to generated plugin outputs, build order,
-  and validation boundaries.
-applies_to:
-- '**'
-read_when:
-- Start of repository work
-- Before changing the TreeWiki skill, plugin, adapters, release, or governed documentation
-relations:
-- type: related_to
-  target: EXPLANATION-KNOWLEDGE-SYSTEM-001
-reviewed: '2026-08-08'
-created_at: null
-modified_at: '2026-08-20T11:14:16.207231Z'
-verified_at: null
-revision: 8
-history_ref: .knowledge/document-history/MAP-ROOT-001.jsonl
-governance:
-  owner: user:owner
-  reviewers:
-  - user:owner
-  review_cadence_days: 90
-  source_of_truth: AGENTS.md
-  last_source_check: '2026-08-20'
-  duplicate_of: null
-  retirement_reason: null
-  scope: standards
-embedding:
-  mode: local_only
-  content: full
 ---
 
-# TreeWiki repository maintenance map
+# TreeWiki 프로젝트 지도
 
-## Scope
+TreeWiki 0.3.0은 프로젝트의 정책과 결정사항을 짧은 Markdown으로 기록하고, 사람과 코딩 에이전트가 필요한 문서만 점진적으로 찾도록 돕는 로컬 우선 플러그인입니다.
 
-- Canonical skill, Python core, Agent Plugin, Claude adapter, release artifacts, governed documentation, and tests.
+복잡한 문서 관리 체계 대신 저장소 지도, 표준 Markdown 링크와 인용, SQLite BM25 검색, 로컬 변경 이력을 조합합니다. 외부 인용은 링크로만 보존하며 자동으로 가져오거나 캐시하지 않습니다.
 
-## Sources and outputs
+## 동작 방식
 
-- `skills/treewiki/`: canonical skill, Python core, templates, references, and release manifest; edit this copy first.
-- `plugins/treewiki/src/`: Agent Plugin stdio and HTTP MCP sources.
-- `plugins/treewiki/dist/`, `plugins/treewiki/skills/treewiki/`, and runtime manifests: generated outputs.
-- `plugins/treewiki-claude/`: Claude plugin manifest and routing; `runtime/` is generated from the canonical Python core.
-- `tests/` and `plugins/treewiki/tests/`: Python contracts and Agent Plugin/MCP regression coverage.
-- `docs/references/treewiki-knowledge-system.md` and `docs/vocabulary/`: governed product contract and vocabulary.
+1. 가장 가까운 `AGENTS.md`에서 프로젝트와 하위 문서의 진입점을 찾습니다.
+2. BM25 검색은 관련 문서의 위치와 링크로 연결된 이웃 문서를 반환합니다.
+3. 선택한 정책이나 결정만 읽고, 필요한 경우 짧은 문서로 수정하거나 추가합니다.
+4. 검증 후 `.knowledge/document-history/`에 의미 변화만 기록하고 `.knowledge/index/`의 파생 색인을 갱신합니다.
 
-## Change flow
+## 프로젝트 구성
 
-- Search governed knowledge and preferences, then read the affected source and tests.
-- Change shared skill or Python behavior only under `skills/treewiki/`; do not hand-edit adapter copies.
-- Change MCP or HTTP behavior under `plugins/treewiki/src/` and its tests.
-- Run the plugin build before computing the release manifest when TypeScript sources change.
-- Build the release manifest, then adapter bundles; sync `.agents/skills/treewiki` only through an exact `runtime` upgrade plan.
-- Finalize changed managed Markdown through its exact document plan before validation.
+- [Agent Plugin](plugins/treewiki/README.md): 스킬, Python 코어, 6개 MCP 도구, 템플릿과 테스트의 canonical 원본입니다.
+- [Claude Plugin](plugins/treewiki-claude/README.md): Agent Plugin의 스킬과 런타임에서 생성되는 `/treewiki` 플러그인입니다.
+- [정책 지도](docs/policies/AGENTS.md): 프로젝트가 지속적으로 따라야 하는 규칙을 연결합니다.
+- [결정 지도](docs/decisions/AGENTS.md): 선택의 배경, 결과와 트레이드오프를 연결합니다.
 
-## Validation
+TreeWiki는 독립 스킬로 배포하지 않습니다. Agent Plugin을 먼저 수정하고 Claude 런타임 생성물은 직접 편집하지 않습니다.
+
+## 문서 모델
+
+- 관리 유형은 `map`, `policy`, `decision`입니다.
+- frontmatter에는 안정적인 `id`와 `type`만 둡니다.
+- 제목은 첫 H1, 관계는 상대 Markdown 링크, 인용은 `## Sources`에서 파생합니다.
+- 본문은 가능하면 50줄 이내로 유지하며 초과는 오류가 아닌 검토 경고입니다.
+
+## 개발과 검증
+
+관련 없는 dirty-tree 작업은 보존하고 다음 검사를 실행합니다.
 
 ```powershell
-$env:PYTHONUTF8='1'
-python -m unittest discover -s tests
 Push-Location plugins/treewiki
 npm run check
 Pop-Location
-python skills/treewiki/scripts/build_adapter_bundles.py . --check
-python skills/treewiki/scripts/build_release_manifest.py skills/treewiki --check
-python skills/treewiki/scripts/knowledge_cli.py manage validate . --strict-warnings
+python plugins/treewiki/skills/treewiki/scripts/treewiki_cli.py validate .
+python plugins/treewiki/skills/treewiki/scripts/treewiki_cli.py sync .
 ```
-
-## Guardrails
-
-- Preserve unrelated work in the dirty tree and review generated diffs before handoff.
-- Never hand-edit generated plugin skill/runtime copies, bundles, or manifests.
-- `build_adapter_bundles.py` atomically replaces generated adapter copies; edit and verify the canonical skill first.
-- Global skill, Claude alias, hook, migration, and index changes require separately scoped approval.
-- Keep managed bodies near 50 lines; split independent topics behind a nearest `AGENTS.md` map.
-- Preserve stable IDs and local history ledgers, and report glossary impact on every governed-document change.
-- Keep detailed lifecycle ledgers under ignored `.knowledge/document-history/`; Git stores only shared lifecycle summaries.

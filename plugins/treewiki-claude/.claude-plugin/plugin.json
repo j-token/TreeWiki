@@ -2,12 +2,12 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
   "name": "treewiki",
   "displayName": "TreeWiki",
-  "version": "0.2.1",
-  "description": "Route repository knowledge, governed memory, history, and upgrades through TreeWiki.",
+  "version": "0.3.0",
+  "description": "Document and search project policies and decisions with local BM25, links, citations, and local history.",
   "author": {
     "name": "j-token"
   },
   "repository": "https://github.com/j-token/treewiki",
   "license": "MIT",
-  "keywords": ["knowledge", "memory", "wiki", "agents"]
+  "keywords": ["policy", "decisions", "documentation", "bm25"]
 }

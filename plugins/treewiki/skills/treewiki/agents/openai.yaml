@@ -1,6 +1,6 @@
 interface:
   display_name: "TreeWiki"
-  short_description: "TreeWiki의 지식 지도와 승인 규칙을 저장소 작업 전에 적용합니다"
-  default_prompt: "Use $treewiki before repository work to retrieve and apply the configured TreeWiki maps and rules."
+  short_description: "프로젝트 정책과 결정을 링크·BM25·로컬 이력으로 관리합니다"
+  default_prompt: "Use $treewiki to search the current workspace before documenting or changing a project policy or decision."
 policy:
   allow_implicit_invocation: true
