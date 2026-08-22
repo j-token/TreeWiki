@@ -9,7 +9,7 @@ const config = loadConfig();
 const service = new TreeWikiService(config);
 const app = createMcpExpressApp({ host: config.host });
 app.use(express.json({ limit: "1mb" }));
-app.get("/health", (_request, response) => response.json({ status: "ok", product: "treewiki", version: "0.2.1" }));
+app.get("/health", (_request, response) => response.json({ status: "ok", product: "treewiki", version: "0.3.0" }));
 app.all("/mcp", async (request, response) => {
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   response.on("close", () => void transport.close());

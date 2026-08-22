@@ -1,7 +1,7 @@
 {
   "name": "treewiki",
-  "version": "0.2.1",
-  "description": "Governed repository knowledge, document history, L3 review, and upgrade planning through native MCP tools.",
+  "version": "0.3.0",
+  "description": "Project policies and decisions with local BM25 search and document history.",
   "author": {
     "name": "j-token"
   },
@@ -10,12 +10,12 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "TreeWiki",
-    "shortDescription": "Govern repository knowledge from Codex.",
-    "longDescription": "Connect approved repositories, search ACL-filtered knowledge, inspect document history, review L3 candidates, and plan safe TreeWiki upgrades through Codex-native MCP tools.",
+    "shortDescription": "Search project policies and decisions.",
+    "longDescription": "Connect the current workspace, search minimal Markdown policies and decisions with local BM25, follow links and citations, and inspect local document history.",
     "developerName": "j-token",
     "category": "Developer Tools",
-    "capabilities": ["Skills", "Native MCP tools", "Governed memory"],
-    "defaultPrompt": "Check the TreeWiki bindings for my current repository and show its status. Plan any required binding change and wait for my approval before applying it."
+    "capabilities": ["Skills", "Native MCP tools", "Local BM25"],
+    "defaultPrompt": "Use TreeWiki to connect the current workspace and search its project policies and decisions."
   },
   "mcpServers": "./.mcp.json"
 }

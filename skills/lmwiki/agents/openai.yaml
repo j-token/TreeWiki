@@ -1,8 +1,0 @@
-interface:
-  display_name: "LMWiki (deprecated)"
-  short_description: "TreeWiki 0.1 호환 shim — $treewiki로 전환하세요"
-  default_prompt: "Warn that $lmwiki is deprecated, then use the sibling $treewiki skill."
-policy:
-  allow_implicit_invocation: false
-release:
-  compatibility_shim_removal: "0.2.0"

@@ -1,15 +1,17 @@
 {
   "name": "@treewiki/agent-plugin",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "Portable TreeWiki Agent Plugin with Codex-native MCP tools.",
+  "description": "TreeWiki Agent Plugin for project policies, decisions, local BM25, and local history.",
   "engines": {
     "node": ">=18"
   },
   "scripts": {
-    "build:server": "tsc -p tsconfig.json",
+    "build:server": "node scripts/clean-dist.mjs && tsc -p tsconfig.json",
     "bundle": "node scripts/build-bundle.mjs",
+    "build:claude": "node scripts/build-claude.mjs",
+    "build:release": "node scripts/build-release-manifest.mjs",
     "build": "npm run build:server && npm run bundle",
     "check": "npm run build && node --test dist/tests/*.test.js && node tests/bundle-smoke.mjs",
     "dev:http": "tsx watch src/http.ts",

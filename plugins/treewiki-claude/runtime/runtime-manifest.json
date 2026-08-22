@@ -1,24 +1,8 @@
 {
-  "core_hash": "sha256:8c6987b0f73a1a618911f77165d7edfd09448a2d2cb6a27ea1f6d8669d5e68c8",
-  "core_version": "0.2.1",
+  "schema": "treewiki.adapter-runtime/v2",
+  "release_version": "0.3.0",
   "files": {
-    "authoring.py": "sha256:1a2e24dd99598e7e2d54ae6b80ffbb92dc7f35dc8d9105647b31c0c197cb05d0",
-    "build_embedding_index.py": "sha256:bf1c00122b8d51c04755e8769fca7f93600f949397c103f03f5018c2c06f671b",
-    "build_search_index.py": "sha256:75e08481995c39047868626ef56257fdd0b85036347421445ae3a4b9fe157e20",
-    "claude_alias.py": "sha256:0c459cdded77d6e31f44a7261f8608d7cf417f7b628a918880196c085805e3ab",
-    "code_context.py": "sha256:1e6bc704d45cca1614bd11308f8904af2c9d2a8bee49eb84c0fe8599406d15f3",
-    "document_composition.py": "sha256:7d9869d9943380b21d43a367eaf70021a00f94381096c7d0c4de1f0407b20b3d",
-    "document_history.py": "sha256:7de2ea388322d8103b3bbb74ceb8c5a289ec81cce1bff599c0e1568fc49785f0",
-    "governance_report.py": "sha256:018b8b77596cb50d4858c69554e797c44c959e53f05827d477235cb40c7b328f",
-    "knowledge_cli.py": "sha256:f1bd0ce44ca9c4fe34689239f5d31c2476b7f767ca63908f2eea82e2ad6857d0",
-    "memory_policy.py": "sha256:cbae8f9e4cec3a344e5512a2d04abcd2ea13801de1935038d1aad5fdaa31c1a3",
-    "okf_v02.py": "sha256:c5d1c7329d76d68cdfd9be37aa9fe5b3d36fc1367379c237a830fe47fef6ce44",
-    "release_manifest.py": "sha256:1dc6c938f5569de7e37d0ff063ec5b4e31ab28e17d179ce269bd6ed0acaf0135",
-    "retrieval_gaps.py": "sha256:308687c8a75855a6212de1bfac9287324d428576541077f6b45087fb0ddaa399",
-    "technical_writing.py": "sha256:583db976fcc99a72cfc0cc8af4d5202179c661533ceb13debf58e08ede4e430b",
-    "upgrade.py": "sha256:9350fb0c74e954d4e7c2bf9b15cbf94ab923619c3390c0fc2b7865ae4e9c5456",
-    "validate_knowledge.py": "sha256:4525107f0a4ed7df8807df61a2ca72fd9ec3aacc5782a5528aa48d74dc3cfeea"
-  },
-  "release_version": "0.2.1",
-  "schema": "treewiki.adapter-runtime/v1"
+    "treewiki_cli.py": "sha256:cf8a4054193b9ad3d8c2da4a343bef6073d4930f6cf617fd38df46ebcc5bf103",
+    "treewiki_core.py": "sha256:7a8b147ee93122366ca086726b432c47da5cc4a9113674d9e54c77c4812f62b0"
+  }
 }

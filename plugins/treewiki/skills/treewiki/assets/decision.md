@@ -1,32 +1,22 @@
 ---
-id: DECISION-SCOPE-001
-title: 결정 제목
+id: DECISION-REPLACE-ME
 type: decision
-status: draft
-authority: normative
-topics:
-  - replace-with-controlled-topic
-summary: 무엇을 어떤 판단축으로 결정했는지 1~2문장으로 설명한다.
-relations: []
-reviewed: YYYY-MM-DD
-created_at: YYYY-MM-DDT00:00:00Z
-modified_at: YYYY-MM-DDT00:00:00Z
-verified_at: null
-revision: 1
-history_ref: .knowledge/document-history/DECISION-SCOPE-001.jsonl
-embedding:
-  mode: local_only
-  content: full
 ---
 
-# 결정 제목
+# Decision title
 
-## 경위
+## Context
 
-## 판단축
+Describe the problem and constraints.
 
-## 검토한 선택지
+## Decision
 
-## 결정
+State the selected approach.
 
-## 결과와 재검토 조건
+## Consequences
+
+Record the important tradeoffs and follow-up effects.
+
+## Sources
+
+- [Supporting source](../path/to/source.md)
